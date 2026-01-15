@@ -1,0 +1,16 @@
+# Docker Compose - Local Development
+
+# Placeholder - will be implemented in Phase 2
+# This provides local development environment
+
+version: '3.8'
+
+services:
+  # TODO: Implement services
+  # - web (Invoice Ninja application)
+  # - worker (Queue worker)
+  # - db (PostgreSQL)
+  # - redis (Cache & queue)
+  # - mailhog (Email testing)
+
+# Reference: docs/LEARNING_PATH.md - Day 1, Phase 1.4

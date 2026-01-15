@@ -1,0 +1,19 @@
+# GitLab CI/CD Configuration for Invoice Ninja on GCP
+
+# Placeholder - will be implemented in Phase 3
+# This will include:
+# - Build stage (Docker images)
+# - Test stage (Unit tests, integration tests)
+# - Security stage (SAST, DAST, container scanning, secrets scanning)
+# - Deploy stage (dev, staging, prod)
+# - Monitoring stage (health checks, smoke tests)
+
+stages:
+  - build
+  - test
+  - security
+  - deploy
+  - monitor
+
+# TODO: Implement full pipeline
+# Reference: docs/LEARNING_PATH.md - Day 2

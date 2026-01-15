@@ -1,0 +1,71 @@
+# Terraform files
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+!terraform.tfvars.example
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# GCP
+.gcloud/
+*.json
+!package.json
+!composer.json
+!tsconfig.json
+
+# Docker
+.dockerignore
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Dependencies
+node_modules/
+vendor/
+
+# Build outputs
+dist/
+build/
+*.zip
+*.tar.gz
+
+# Secrets & credentials
+secrets/
+*.pem
+*.key
+*.crt
+id_rsa*
+*.p12
+*.jks
+
+# Temporary files
+tmp/
+temp/
+*.tmp

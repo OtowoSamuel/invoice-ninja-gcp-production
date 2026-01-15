@@ -1,0 +1,30 @@
+@startuml
+package "Cloud Run" {
+  [Web App]
+  [Queue Workers]
+}
+
+package "Data & Cache" {
+  database "Cloud SQL (Postgres)" as DB
+  [Redis / Memorystore]
+}
+
+package "Storage & External" {
+  [Cloud Storage]
+  [SMTP / Email Provider]
+  [Payment Gateway]
+}
+
+[Web App] --> DB : read / write
+[Web App] --> [Redis / Memorystore] : cache
+[Web App] --> [Pub/Sub / Redis Queue] : enqueue job
+[Queue Workers] --> [Pub/Sub / Redis Queue] : dequeue job
+[Queue Workers] --> [Cloud Storage] : save files
+[Queue Workers] --> [Payment Gateway] : charge / webhook
+[Queue Workers] --> [SMTP / Email Provider] : send mails
+[Web App] --> [Secret Manager] : get credentials
+[Queue Workers] --> [Secret Manager] : get credentials
+[Web App] --> [Cloud Monitoring] : metrics/logs
+[Queue Workers] --> [Cloud Monitoring] : metrics/logs
+
+@enduml

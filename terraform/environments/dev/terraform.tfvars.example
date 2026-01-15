@@ -1,0 +1,13 @@
+# Copy this file to terraform.tfvars and fill in your values
+# terraform.tfvars is gitignored for security
+
+project_id = "your-gcp-project-id"
+region     = "us-central1"
+
+database_name = "invoiceninja"
+database_user = "invoiceninja"
+
+# Update after building container image
+# web_container_image = "gcr.io/your-project-id/invoice-ninja:dev-latest"
+
+alert_email = "your-email@example.com"
