@@ -1,16 +1,181 @@
+########################################
 # Docker Compose - Local Development
-
-# Placeholder - will be implemented in Phase 2
-# This provides local development environment
+# LEARNING: Full dev environment in one command
+########################################
 
 version: '3.8'
 
-services:
-  # TODO: Implement services
-  # - web (Invoice Ninja application)
-  # - worker (Queue worker)
-  # - db (PostgreSQL)
-  # - redis (Cache & queue)
-  # - mailhog (Email testing)
+# NETWORKS: Isolate services (security best practice)
+# WHY: Services can only talk if explicitly connected
+networks:
+  invoiceninja:
+    driver: bridge
 
-# Reference: docs/LEARNING_PATH.md - Day 1, Phase 1.4
+# VOLUMES: Persistent data (survives container restarts)
+# WHY: Database data must persist, not be lost on restart
+volumes:
+  db-data:  # PostgreSQL data
+  redis-data:  # Redis cache data
+
+services:
+  ########################################
+  # PostgreSQL Database
+  ########################################
+  db:
+    image: postgres:15-alpine
+    container_name: invoiceninja-db
+    restart: unless-stopped
+    networks:
+      - invoiceninja
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: invoiceninja
+      POSTGRES_USER: invoiceninja
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5432:5432"  # Expose for local tools (TablePlus, pgAdmin, etc.)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U invoiceninja"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ########################################
+  # Redis (Cache + Queue)
+  ########################################
+  redis:
+    image: redis:7-alpine
+    container_name: invoiceninja-redis
+    restart: unless-stopped
+    networks:
+      - invoiceninja
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  ########################################
+  # MailHog (Email Testing)
+  ########################################
+  # LEARNING: Catch all emails sent by app
+  # WHY: Don't send real emails in dev, see them in web UI
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: invoiceninja-mailhog
+    restart: unless-stopped
+    networks:
+      - invoiceninja
+    ports:
+      - "1025:1025"  # SMTP server
+      - "8025:8025"  # Web UI - http://localhost:8025
+
+  ########################################
+  # Web Application (Invoice Ninja)
+  ########################################
+  web:
+    build:
+      context: .
+      dockerfile: docker/web/Dockerfile
+      target: production
+    container_name: invoiceninja-web
+    restart: unless-stopped
+    networks:
+      - invoiceninja
+    ports:
+      - "8000:8080"  # Access at http://localhost:8000
+    volumes:
+      # Mount code for live editing (dev only!)
+      - ./invoiceninja:/var/www/html:delegated
+      # Persistent storage
+      - ./storage/public:/var/www/html/storage/app/public
+    environment:
+      # Database connection
+      DB_CONNECTION: pgsql
+      DB_HOST: db  # Docker network name resolution
+      DB_PORT: 5432
+      DB_DATABASE: invoiceninja
+      DB_USERNAME: invoiceninja
+      DB_PASSWORD: secret
+      
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      
+      # Queue configuration
+      QUEUE_CONNECTION: redis
+      
+      # Mail configuration (MailHog)
+      MAIL_MAILER: smtp
+      MAIL_HOST: mailhog
+      MAIL_PORT: 1025
+      MAIL_USERNAME: null
+      MAIL_PASSWORD: null
+      MAIL_ENCRYPTION: null
+      
+      # App configuration
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:8000
+      APP_KEY: base64:YOUR_APP_KEY_HERE  # Generate: php artisan key:generate
+      
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    
+    # LEARNING: depends_on with condition
+    # WHY: Don't start web until database is ready
+    # BENEFIT: Avoids connection errors on startup
+
+  ########################################
+  # Queue Worker
+  ########################################
+  worker:
+    build:
+      context: .
+      dockerfile: docker/worker/Dockerfile
+      target: production
+    container_name: invoiceninja-worker
+    restart: unless-stopped
+    networks:
+      - invoiceninja
+    volumes:
+      - ./invoiceninja:/var/www/html:delegated
+      - ./storage/public:/var/www/html/storage/app/public
+    environment:
+      # Same environment as web (workers need DB + Redis access)
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: invoiceninja
+      DB_USERNAME: invoiceninja
+      DB_PASSWORD: secret
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      QUEUE_CONNECTION: redis
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_KEY: base64:YOUR_APP_KEY_HERE
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+########################################
+# USAGE COMMANDS
+########################################
+# Start:     docker-compose up -d
+# Stop:      docker-compose down
+# Rebuild:   docker-compose up --build
+# Logs:      docker-compose logs -f [service]
+# Shell:     docker-compose exec web sh
+# Artisan:   docker-compose exec web php artisan [command]
+
