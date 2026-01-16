@@ -1,0 +1,125 @@
+# Test Template - Reusable Testing Jobs
+# Learn: Unit tests, integration tests, code quality
+
+.test_template:
+  stage: test
+  image: php:8.2-cli-alpine
+  before_script:
+    # Install dependencies
+    - apk add --no-cache git postgresql-dev ${PHP_EXT_INSTALL:-}
+    - docker-php-ext-install pdo_pgsql ${PHP_EXT_INSTALL:-}
+    # Install Composer
+    - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+    # Install project dependencies
+    - cd invoiceninja
+    - composer install --no-interaction --no-progress --prefer-dist
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - invoiceninja/vendor/
+  retry:
+    max: 2
+
+# Unit Tests
+test:unit:
+  extends: .test_template
+  script:
+    - cd invoiceninja
+    - php artisan test --parallel --coverage-text --coverage-cobertura=coverage.cobertura.xml
+  coverage: '/^\s*Lines:\s*\d+.\d+\%/'
+  artifacts:
+    when: always
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: invoiceninja/coverage.cobertura.xml
+      junit: invoiceninja/junit.xml
+    paths:
+      - invoiceninja/coverage.cobertura.xml
+    expire_in: 1 week
+
+# Code Quality Analysis
+test:code-quality:
+  stage: test
+  image: php:8.2-cli-alpine
+  before_script:
+    - apk add --no-cache git
+    - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+    - cd invoiceninja
+    - composer global require phpstan/phpstan
+    - export PATH="$PATH:$HOME/.composer/vendor/bin"
+  script:
+    - phpstan analyse --level=5 --error-format=gitlab > phpstan-report.json || true
+  artifacts:
+    reports:
+      codequality: invoiceninja/phpstan-report.json
+    expire_in: 1 week
+  allow_failure: true
+
+# PHP Code Sniffer
+test:code-style:
+  stage: test
+  image: php:8.2-cli-alpine
+  before_script:
+    - apk add --no-cache git
+    - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+    - composer global require squizlabs/php_codesniffer
+    - export PATH="$PATH:$HOME/.composer/vendor/bin"
+  script:
+    - cd invoiceninja
+    - phpcs --standard=PSR12 --report=gitlab app/ > phpcs-report.json || true
+  artifacts:
+    reports:
+      codequality: invoiceninja/phpcs-report.json
+    expire_in: 1 week
+  allow_failure: true
+
+# Integration Tests (with Database)
+test:integration:
+  extends: .test_template
+  services:
+    - postgres:15-alpine
+  variables:
+    POSTGRES_DB: testing
+    POSTGRES_USER: invoiceninja
+    POSTGRES_PASSWORD: testing
+    DB_CONNECTION: pgsql
+    DB_HOST: postgres
+    DB_PORT: 5432
+    DB_DATABASE: testing
+    DB_USERNAME: invoiceninja
+    DB_PASSWORD: testing
+  script:
+    - cd invoiceninja
+    - php artisan migrate --force
+    - php artisan test --testsuite=Integration
+  artifacts:
+    when: always
+    reports:
+      junit: invoiceninja/junit.xml
+    expire_in: 1 week
+
+# E2E Tests (Placeholder for Cypress/Playwright)
+test:e2e:
+  stage: test
+  image: mcr.microsoft.com/playwright:v1.40.0-focal
+  services:
+    - postgres:15-alpine
+  variables:
+    POSTGRES_DB: testing
+    POSTGRES_USER: invoiceninja
+    POSTGRES_PASSWORD: testing
+  before_script:
+    - npm ci
+  script:
+    - npx playwright test
+  artifacts:
+    when: always
+    paths:
+      - playwright-report/
+      - test-results/
+    expire_in: 1 week
+  allow_failure: true
+  only:
+    - merge_requests
+    - main

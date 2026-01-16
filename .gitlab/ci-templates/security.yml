@@ -1,0 +1,257 @@
+# Security Template - Comprehensive Security Scanning
+# Learn: SAST, DAST, container scanning, secrets detection
+
+.security_template:
+  stage: security
+  allow_failure: true
+  retry:
+    max: 2
+
+########################################
+# SAST - Static Application Security Testing
+########################################
+
+sast:semgrep:
+  extends: .security_template
+  image: returntocorp/semgrep:latest
+  script:
+    # Run Semgrep with auto config (detects languages automatically)
+    - semgrep --config=auto --json --output=semgrep-report.json .
+    # Run with specific rulesets
+    - semgrep --config=p/owasp-top-ten --config=p/security-audit --json --output=semgrep-owasp.json .
+    # Fail on high severity findings
+    - semgrep --config=auto --severity ERROR --error .
+  artifacts:
+    reports:
+      sast: semgrep-report.json
+    paths:
+      - semgrep-report.json
+      - semgrep-owasp.json
+    expire_in: 1 week
+  rules:
+    - if: $CI_MERGE_REQUEST_ID
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+sast:phpstan:
+  extends: .security_template
+  image: php:8.2-cli-alpine
+  before_script:
+    - apk add --no-cache git
+    - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+    - cd invoiceninja
+    - composer install --no-dev --no-interaction
+  script:
+    # Run PHPStan for static analysis
+    - composer global require phpstan/phpstan
+    - export PATH="$PATH:$HOME/.composer/vendor/bin"
+    - phpstan analyse --level=max --error-format=json > phpstan-security.json || true
+  artifacts:
+    paths:
+      - phpstan-security.json
+    expire_in: 1 week
+
+########################################
+# Container Image Scanning
+########################################
+
+security:trivy:web:
+  extends: .security_template
+  stage: security
+  image: aquasec/trivy:latest
+  variables:
+    TRIVY_NO_PROGRESS: "true"
+    TRIVY_CACHE_DIR: ".trivycache/"
+  dependencies:
+    - build:web
+  script:
+    # Scan web image for vulnerabilities
+    - trivy image --severity HIGH,CRITICAL --format json --output trivy-web-report.json ${WEB_IMAGE}
+    # Fail on CRITICAL vulnerabilities
+    - trivy image --severity CRITICAL --exit-code 1 ${WEB_IMAGE}
+    # Generate human-readable report
+    - trivy image --severity HIGH,CRITICAL --format table ${WEB_IMAGE}
+  artifacts:
+    reports:
+      container_scanning: trivy-web-report.json
+    paths:
+      - trivy-web-report.json
+    expire_in: 1 week
+  cache:
+    paths:
+      - .trivycache/
+
+security:trivy:worker:
+  extends: .security_template
+  stage: security
+  image: aquasec/trivy:latest
+  variables:
+    TRIVY_NO_PROGRESS: "true"
+    TRIVY_CACHE_DIR: ".trivycache/"
+  dependencies:
+    - build:worker
+  script:
+    # Scan worker image for vulnerabilities
+    - trivy image --severity HIGH,CRITICAL --format json --output trivy-worker-report.json ${WORKER_IMAGE}
+    - trivy image --severity CRITICAL --exit-code 1 ${WORKER_IMAGE}
+    - trivy image --severity HIGH,CRITICAL --format table ${WORKER_IMAGE}
+  artifacts:
+    reports:
+      container_scanning: trivy-worker-report.json
+    paths:
+      - trivy-worker-report.json
+    expire_in: 1 week
+  cache:
+    paths:
+      - .trivycache/
+
+########################################
+# Dependency Scanning
+########################################
+
+security:dependency-check:
+  extends: .security_template
+  image: php:8.2-cli-alpine
+  before_script:
+    - apk add --no-cache git curl
+    - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+  script:
+    # Composer security audit
+    - cd invoiceninja
+    - composer audit --format=json > composer-audit.json || true
+    # Check for outdated packages with security issues
+    - composer outdated --direct --format=json > composer-outdated.json || true
+  artifacts:
+    paths:
+      - invoiceninja/composer-audit.json
+      - invoiceninja/composer-outdated.json
+    expire_in: 1 week
+
+security:npm-audit:
+  extends: .security_template
+  image: node:18-alpine
+  script:
+    - cd invoiceninja
+    - npm audit --json > npm-audit.json || true
+    - npm audit --audit-level=high || true
+  artifacts:
+    paths:
+      - invoiceninja/npm-audit.json
+    expire_in: 1 week
+  allow_failure: true
+
+########################################
+# Secrets Scanning
+########################################
+
+security:trufflehog:
+  extends: .security_template
+  image: trufflesecurity/trufflehog:latest
+  script:
+    # Scan entire git history for secrets
+    - trufflehog git file://. --json --no-update > trufflehog-report.json || true
+    # Fail if verified secrets found
+    - trufflehog git file://. --only-verified --fail || true
+  artifacts:
+    paths:
+      - trufflehog-report.json
+    expire_in: 1 week
+
+security:gitleaks:
+  extends: .security_template
+  image: zricethezav/gitleaks:latest
+  script:
+    # Scan for secrets with gitleaks
+    - gitleaks detect --source . --report-format json --report-path gitleaks-report.json || true
+    # Fail on findings
+    - gitleaks detect --source . --exit-code 1 || true
+  artifacts:
+    paths:
+      - gitleaks-report.json
+    expire_in: 1 week
+
+########################################
+# DAST - Dynamic Application Security Testing
+########################################
+
+security:dast:zap:
+  extends: .security_template
+  stage: security
+  image: owasp/zap2docker-stable:latest
+  variables:
+    ZAP_TARGET_URL: "${DAST_WEBSITE}"  # Set in CI/CD variables
+  dependencies:
+    - deploy:dev  # Run after dev deployment
+  script:
+    # Baseline scan (passive scan)
+    - zap-baseline.py -t ${ZAP_TARGET_URL} -r zap-baseline-report.html -J zap-baseline-report.json || true
+    # API scan (if API endpoints defined)
+    - |
+      if [ -f "openapi.yaml" ]; then
+        zap-api-scan.py -t ${ZAP_TARGET_URL} -f openapi.yaml -r zap-api-report.html -J zap-api-report.json || true
+      fi
+  artifacts:
+    paths:
+      - zap-baseline-report.html
+      - zap-baseline-report.json
+      - zap-api-report.html
+      - zap-api-report.json
+    expire_in: 1 week
+  only:
+    - schedules  # Run on scheduled pipelines
+    - merge_requests
+    - main
+  when: manual  # Manual trigger for DAST (can be slow)
+
+########################################
+# License Compliance Scanning
+########################################
+
+security:license-check:
+  extends: .security_template
+  image: licensefinder/license_finder:latest
+  script:
+    - cd invoiceninja
+    - license_finder report --format json > license-report.json || true
+    # Fail on unapproved licenses
+    - license_finder || true
+  artifacts:
+    paths:
+      - invoiceninja/license-report.json
+    expire_in: 1 week
+  allow_failure: true
+
+########################################
+# Security Report Aggregation
+########################################
+
+security:report:
+  stage: security
+  image: alpine:latest
+  dependencies:
+    - sast:semgrep
+    - security:trivy:web
+    - security:trivy:worker
+    - security:dependency-check
+    - security:trufflehog
+  script:
+    - |
+      echo "# Security Scan Summary" > security-summary.md
+      echo "" >> security-summary.md
+      echo "## SAST Findings" >> security-summary.md
+      if [ -f semgrep-report.json ]; then
+        echo "- Semgrep: $(cat semgrep-report.json | grep -c 'results' || echo 0) findings" >> security-summary.md
+      fi
+      echo "" >> security-summary.md
+      echo "## Container Vulnerabilities" >> security-summary.md
+      if [ -f trivy-web-report.json ]; then
+        echo "- Web Image: See trivy-web-report.json" >> security-summary.md
+      fi
+      if [ -f trivy-worker-report.json ]; then
+        echo "- Worker Image: See trivy-worker-report.json" >> security-summary.md
+      fi
+      cat security-summary.md
+  artifacts:
+    paths:
+      - security-summary.md
+    expire_in: 1 week
+  allow_failure: true

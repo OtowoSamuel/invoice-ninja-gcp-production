@@ -6,6 +6,10 @@
 FROM composer:2.6 AS composer-build
 
 WORKDIR /app
+
+# Increase composer process timeout during image build to avoid VCS clone timeouts
+ARG COMPOSER_PROCESS_TIMEOUT=2000
+ENV COMPOSER_PROCESS_TIMEOUT=${COMPOSER_PROCESS_TIMEOUT}
 COPY invoiceninja/composer.json invoiceninja/composer.lock ./
 RUN composer install \
     --no-dev \

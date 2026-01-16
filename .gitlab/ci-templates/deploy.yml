@@ -1,0 +1,350 @@
+# Deploy Template - Reusable Deployment Jobs
+# Learn: Cloud Run deployments, traffic management, rollback strategies
+
+.deploy_template:
+  stage: deploy
+  image: google/cloud-sdk:alpine
+  before_script:
+    # Authenticate to GCP
+    - echo $GCP_SERVICE_KEY | gcloud auth activate-service-account --key-file=-
+    - gcloud config set project ${GCP_PROJECT_ID}
+    - gcloud config set run/region ${GCP_REGION}
+  retry:
+    max: 2
+    when:
+      - unknown_failure
+      - api_failure
+
+.deploy_web:
+  extends: .deploy_template
+  script:
+    # Deploy web service to Cloud Run
+    - |
+      gcloud run deploy ${SERVICE_NAME}-web \
+        --image ${WEB_IMAGE} \
+        --platform managed \
+        --region ${GCP_REGION} \
+        --allow-unauthenticated \
+        --vpc-connector ${VPC_CONNECTOR} \
+        --set-env-vars="APP_ENV=${ENVIRONMENT},APP_DEBUG=${APP_DEBUG}" \
+        --set-secrets="APP_KEY=app-key:latest,DB_PASSWORD=db-password:latest" \
+        --memory ${MEMORY:-512Mi} \
+        --cpu ${CPU:-1} \
+        --min-instances ${MIN_INSTANCES:-0} \
+        --max-instances ${MAX_INSTANCES:-10} \
+        --concurrency ${CONCURRENCY:-80} \
+        --timeout ${TIMEOUT:-300} \
+        --labels="app=invoiceninja,component=web,environment=${ENVIRONMENT}" \
+        --service-account ${SERVICE_ACCOUNT} \
+        --no-traffic  # Deploy without routing traffic (blue-green)
+    
+    # Get the new revision name
+    - NEW_REVISION=$(gcloud run revisions list --service ${SERVICE_NAME}-web --format="value(name)" --limit=1)
+    - echo "NEW_REVISION=${NEW_REVISION}" >> deploy.env
+    - echo "Deployed revision: ${NEW_REVISION}"
+  artifacts:
+    reports:
+      dotenv: deploy.env
+    expire_in: 1 day
+
+.deploy_worker:
+  extends: .deploy_template
+  script:
+    # Deploy worker service to Cloud Run
+    - |
+      gcloud run deploy ${SERVICE_NAME}-worker \
+        --image ${WORKER_IMAGE} \
+        --platform managed \
+        --region ${GCP_REGION} \
+        --no-allow-unauthenticated \
+        --vpc-connector ${VPC_CONNECTOR} \
+        --set-env-vars="APP_ENV=${ENVIRONMENT},QUEUE_CONNECTION=redis" \
+        --set-secrets="APP_KEY=app-key:latest,DB_PASSWORD=db-password:latest,REDIS_PASSWORD=redis-password:latest" \
+        --memory ${WORKER_MEMORY:-1Gi} \
+        --cpu ${WORKER_CPU:-1} \
+        --min-instances ${WORKER_MIN_INSTANCES:-1} \
+        --max-instances ${WORKER_MAX_INSTANCES:-5} \
+        --labels="app=invoiceninja,component=worker,environment=${ENVIRONMENT}" \
+        --service-account ${SERVICE_ACCOUNT}
+
+########################################
+# Development Deployment
+########################################
+
+deploy:dev:
+  extends: .deploy_web
+  stage: deploy
+  environment:
+    name: development
+    url: https://invoiceninja-dev-${CI_PROJECT_ID}.run.app
+    on_stop: destroy:dev
+  variables:
+    ENVIRONMENT: dev
+    SERVICE_NAME: invoiceninja-dev
+    VPC_CONNECTOR: dev-vpc-connector
+    SERVICE_ACCOUNT: cloud-run-dev@${GCP_PROJECT_ID}.iam.gserviceaccount.com
+    APP_DEBUG: "true"
+    MEMORY: 512Mi
+    MIN_INSTANCES: 0
+    MAX_INSTANCES: 3
+  dependencies:
+    - build:web
+  only:
+    - develop
+    - merge_requests
+  except:
+    - tags
+
+deploy:dev:worker:
+  extends: .deploy_worker
+  stage: deploy
+  environment:
+    name: development
+  variables:
+    ENVIRONMENT: dev
+    SERVICE_NAME: invoiceninja-dev
+    VPC_CONNECTOR: dev-vpc-connector
+    SERVICE_ACCOUNT: cloud-run-dev@${GCP_PROJECT_ID}.iam.gserviceaccount.com
+    WORKER_MEMORY: 512Mi
+    WORKER_MIN_INSTANCES: 1
+    WORKER_MAX_INSTANCES: 2
+  dependencies:
+    - build:worker
+  only:
+    - develop
+    - merge_requests
+
+########################################
+# Staging Deployment
+########################################
+
+deploy:staging:
+  extends: .deploy_web
+  stage: deploy
+  environment:
+    name: staging
+    url: https://invoiceninja-staging-${CI_PROJECT_ID}.run.app
+    on_stop: destroy:staging
+  variables:
+    ENVIRONMENT: staging
+    SERVICE_NAME: invoiceninja-staging
+    VPC_CONNECTOR: staging-vpc-connector
+    SERVICE_ACCOUNT: cloud-run-staging@${GCP_PROJECT_ID}.iam.gserviceaccount.com
+    APP_DEBUG: "false"
+    MEMORY: 1Gi
+    MIN_INSTANCES: 1
+    MAX_INSTANCES: 10
+  dependencies:
+    - build:web
+  only:
+    - main
+  when: manual  # Manual approval required
+
+deploy:staging:worker:
+  extends: .deploy_worker
+  stage: deploy
+  environment:
+    name: staging
+  variables:
+    ENVIRONMENT: staging
+    SERVICE_NAME: invoiceninja-staging
+    VPC_CONNECTOR: staging-vpc-connector
+    SERVICE_ACCOUNT: cloud-run-staging@${GCP_PROJECT_ID}.iam.gserviceaccount.com
+    WORKER_MEMORY: 1Gi
+    WORKER_MIN_INSTANCES: 1
+    WORKER_MAX_INSTANCES: 5
+  dependencies:
+    - build:worker
+  only:
+    - main
+  when: manual
+
+########################################
+# Production Deployment (Blue-Green)
+########################################
+
+deploy:prod:
+  extends: .deploy_web
+  stage: deploy
+  environment:
+    name: production
+    url: https://invoiceninja.example.com
+    on_stop: destroy:prod
+  variables:
+    ENVIRONMENT: production
+    SERVICE_NAME: invoiceninja-prod
+    VPC_CONNECTOR: prod-vpc-connector
+    SERVICE_ACCOUNT: cloud-run-prod@${GCP_PROJECT_ID}.iam.gserviceaccount.com
+    APP_DEBUG: "false"
+    MEMORY: 2Gi
+    CPU: 2
+    MIN_INSTANCES: 2
+    MAX_INSTANCES: 50
+    CONCURRENCY: 100
+  dependencies:
+    - build:web
+  only:
+    - tags  # Only deploy on version tags
+  when: manual
+
+deploy:prod:worker:
+  extends: .deploy_worker
+  stage: deploy
+  environment:
+    name: production
+  variables:
+    ENVIRONMENT: production
+    SERVICE_NAME: invoiceninja-prod
+    VPC_CONNECTOR: prod-vpc-connector
+    SERVICE_ACCOUNT: cloud-run-prod@${GCP_PROJECT_ID}.iam.gserviceaccount.com
+    WORKER_MEMORY: 2Gi
+    WORKER_CPU: 2
+    WORKER_MIN_INSTANCES: 2
+    WORKER_MAX_INSTANCES: 20
+  dependencies:
+    - build:worker
+  only:
+    - tags
+  when: manual
+
+########################################
+# Traffic Management (Blue-Green)
+########################################
+
+.traffic_shift:
+  stage: deploy
+  image: google/cloud-sdk:alpine
+  before_script:
+    - echo $GCP_SERVICE_KEY | gcloud auth activate-service-account --key-file=-
+    - gcloud config set project ${GCP_PROJECT_ID}
+    - gcloud config set run/region ${GCP_REGION}
+
+# Canary deployment - route 10% traffic to new revision
+traffic:canary:
+  extends: .traffic_shift
+  environment:
+    name: production
+  dependencies:
+    - deploy:prod
+  script:
+    - |
+      gcloud run services update-traffic ${SERVICE_NAME}-web \
+        --to-revisions=${NEW_REVISION}=10,LATEST=90
+    - echo "Canary deployment: 10% traffic to ${NEW_REVISION}"
+  only:
+    - tags
+  when: manual
+
+# Gradual rollout - 50% traffic
+traffic:rollout-50:
+  extends: .traffic_shift
+  environment:
+    name: production
+  script:
+    - |
+      gcloud run services update-traffic ${SERVICE_NAME}-web \
+        --to-revisions=${NEW_REVISION}=50,LATEST=50
+    - echo "Rollout: 50% traffic to ${NEW_REVISION}"
+  only:
+    - tags
+  when: manual
+
+# Full rollout - 100% traffic
+traffic:rollout-100:
+  extends: .traffic_shift
+  environment:
+    name: production
+  script:
+    - |
+      gcloud run services update-traffic ${SERVICE_NAME}-web \
+        --to-latest
+    - echo "Full rollout: 100% traffic to latest"
+  only:
+    - tags
+  when: manual
+
+########################################
+# Smoke Tests After Deployment
+########################################
+
+.smoke_test:
+  stage: deploy
+  image: curlimages/curl:latest
+  script:
+    - echo "Running smoke tests against ${TEST_URL}"
+    - |
+      # Health check
+      HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" ${TEST_URL}/health)
+      if [ $HTTP_CODE -ne 200 ]; then
+        echo "Health check failed with status $HTTP_CODE"
+        exit 1
+      fi
+    - echo "Smoke tests passed"
+
+smoke:dev:
+  extends: .smoke_test
+  environment:
+    name: development
+  variables:
+    TEST_URL: https://invoiceninja-dev-${CI_PROJECT_ID}.run.app
+  dependencies:
+    - deploy:dev
+  only:
+    - develop
+    - merge_requests
+
+smoke:staging:
+  extends: .smoke_test
+  environment:
+    name: staging
+  variables:
+    TEST_URL: https://invoiceninja-staging-${CI_PROJECT_ID}.run.app
+  dependencies:
+    - deploy:staging
+  only:
+    - main
+
+smoke:prod:
+  extends: .smoke_test
+  environment:
+    name: production
+  variables:
+    TEST_URL: https://invoiceninja.example.com
+  dependencies:
+    - deploy:prod
+  only:
+    - tags
+
+########################################
+# Environment Teardown
+########################################
+
+destroy:dev:
+  extends: .deploy_template
+  stage: deploy
+  environment:
+    name: development
+    action: stop
+  script:
+    - gcloud run services delete ${SERVICE_NAME}-web --quiet || true
+    - gcloud run services delete ${SERVICE_NAME}-worker --quiet || true
+  variables:
+    SERVICE_NAME: invoiceninja-dev
+  when: manual
+  only:
+    - develop
+
+destroy:staging:
+  extends: .deploy_template
+  stage: deploy
+  environment:
+    name: staging
+    action: stop
+  script:
+    - gcloud run services delete ${SERVICE_NAME}-web --quiet || true
+    - gcloud run services delete ${SERVICE_NAME}-worker --quiet || true
+  variables:
+    SERVICE_NAME: invoiceninja-staging
+  when: manual
+  only:
+    - main

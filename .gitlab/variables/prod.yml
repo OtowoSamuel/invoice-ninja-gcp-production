@@ -1,0 +1,98 @@
+# Production Environment Variables
+# Production configuration with high availability and security
+
+variables:
+  # Environment
+  ENVIRONMENT: "production"
+  APP_ENV: "production"
+  APP_DEBUG: "false"
+  
+  # GCP Configuration
+  GCP_REGION: "us-central1"
+  GCP_PROJECT_ID: "your-project-id-prod"
+  
+  # Cloud Run Configuration
+  SERVICE_NAME: "invoiceninja-prod"
+  VPC_CONNECTOR: "prod-vpc-connector"
+  
+  # Service Account
+  SERVICE_ACCOUNT: "cloud-run-prod@your-project-id-prod.iam.gserviceaccount.com"
+  
+  # Resource Limits (Production - High Availability)
+  MEMORY: "2Gi"
+  CPU: "2"
+  MIN_INSTANCES: "2"  # Always at least 2 for redundancy
+  MAX_INSTANCES: "50"
+  CONCURRENCY: "100"
+  TIMEOUT: "300"
+  
+  # Worker Configuration (Multiple workers for scale)
+  WORKER_MEMORY: "2Gi"
+  WORKER_CPU: "2"
+  WORKER_MIN_INSTANCES: "2"  # Always processing queue
+  WORKER_MAX_INSTANCES: "20"
+  
+  # Database (Production with High Availability)
+  DB_INSTANCE: "invoiceninja-prod-db"
+  DB_CONNECTION: "pgsql"
+  DB_DATABASE: "invoiceninja_prod"
+  DB_USERNAME: "invoiceninja"
+  # DB_PASSWORD stored in GitLab CI/CD variables (protected, masked)
+  
+  # Redis (Production with persistence)
+  REDIS_HOST: "10.3.0.3"  # Internal IP
+  REDIS_PORT: "6379"
+  # REDIS_PASSWORD stored in GitLab CI/CD variables
+  
+  # Queue
+  QUEUE_CONNECTION: "redis"
+  
+  # Storage (Production bucket)
+  STORAGE_BUCKET: "invoiceninja-prod-storage"
+  
+  # Monitoring & Logging
+  LOG_LEVEL: "warning"  # Only warnings and errors
+  ENABLE_CLOUD_LOGGING: "true"
+  ENABLE_CLOUD_MONITORING: "true"
+  ENABLE_ERROR_REPORTING: "true"
+  
+  # DAST Target URL (production domain)
+  DAST_WEBSITE: "https://invoiceninja.example.com"
+  
+  # Feature Flags (production = stable features only)
+  ENABLE_NEW_FEATURES: "false"
+  ENABLE_DEBUG_TOOLBAR: "false"
+  ENABLE_PROFILING: "false"
+  
+  # Security
+  FORCE_HTTPS: "true"
+  SESSION_SECURE_COOKIE: "true"
+  
+  # Rate Limiting (Protect production)
+  RATE_LIMIT_ENABLED: "true"
+  RATE_LIMIT_MAX_ATTEMPTS: "60"
+  
+  # Backup Configuration
+  BACKUP_ENABLED: "true"
+  BACKUP_RETENTION_DAYS: "30"
+  
+  # Compliance
+  AUDIT_LOGGING: "true"
+  GDPR_COMPLIANCE: "true"
+
+# Pipeline rules for production
+.production_rules:
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'  # Only on semantic version tags
+      when: manual  # Always require manual approval
+  allow_failure: false  # Production failures are critical
+
+# Production deployment restrictions
+.production_protected:
+  only:
+    - tags
+  except:
+    - branches
+  environment:
+    name: production
+    deployment_tier: production

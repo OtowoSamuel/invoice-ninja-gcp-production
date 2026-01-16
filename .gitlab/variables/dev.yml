@@ -1,0 +1,67 @@
+# Development Environment Variables
+# These are included in the pipeline for dev deployments
+
+variables:
+  # Environment
+  ENVIRONMENT: "dev"
+  APP_ENV: "local"
+  APP_DEBUG: "true"
+  
+  # GCP Configuration
+  GCP_REGION: "us-central1"
+  GCP_PROJECT_ID: "your-project-id-dev"
+  
+  # Cloud Run Configuration
+  SERVICE_NAME: "invoiceninja-dev"
+  VPC_CONNECTOR: "dev-vpc-connector"
+  
+  # Service Account
+  SERVICE_ACCOUNT: "cloud-run-dev@your-project-id-dev.iam.gserviceaccount.com"
+  
+  # Resource Limits (Conservative for dev)
+  MEMORY: "512Mi"
+  CPU: "1"
+  MIN_INSTANCES: "0"  # Scale to zero when idle
+  MAX_INSTANCES: "3"
+  CONCURRENCY: "80"
+  TIMEOUT: "300"
+  
+  # Worker Configuration
+  WORKER_MEMORY: "512Mi"
+  WORKER_CPU: "1"
+  WORKER_MIN_INSTANCES: "1"
+  WORKER_MAX_INSTANCES: "2"
+  
+  # Database
+  DB_INSTANCE: "invoiceninja-dev-db"
+  DB_CONNECTION: "pgsql"
+  DB_DATABASE: "invoiceninja_dev"
+  DB_USERNAME: "invoiceninja"
+  # DB_PASSWORD stored in GitLab CI/CD variables (protected)
+  
+  # Redis
+  REDIS_HOST: "10.1.0.3"  # Internal IP
+  REDIS_PORT: "6379"
+  # REDIS_PASSWORD stored in GitLab CI/CD variables
+  
+  # Queue
+  QUEUE_CONNECTION: "redis"
+  
+  # Storage
+  STORAGE_BUCKET: "invoiceninja-dev-storage"
+  
+  # Monitoring
+  LOG_LEVEL: "debug"
+  
+  # DAST Target URL
+  DAST_WEBSITE: "https://invoiceninja-dev-your-project-id-dev.run.app"
+  
+  # Feature Flags (dev can test all features)
+  ENABLE_NEW_FEATURES: "true"
+  ENABLE_DEBUG_TOOLBAR: "true"
+
+# Pipeline rules for dev
+.dev_rules:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "develop"'

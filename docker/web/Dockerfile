@@ -7,6 +7,10 @@ FROM composer:2.6 AS composer-build
 
 WORKDIR /app
 
+# Increase composer process timeout during image build to avoid VCS clone timeouts
+ARG COMPOSER_PROCESS_TIMEOUT=2000
+ENV COMPOSER_PROCESS_TIMEOUT=${COMPOSER_PROCESS_TIMEOUT}
+
 # OPTIMIZATION: Copy only dependency files first (layer caching!)
 # If these files don't change, Docker reuses this layer
 COPY invoiceninja/composer.json invoiceninja/composer.lock ./

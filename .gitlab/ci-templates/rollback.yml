@@ -1,0 +1,284 @@
+# Rollback Template - Quick Recovery from Failed Deployments
+# Learn: Rollback strategies, incident response, traffic management
+
+.rollback_template:
+  stage: deploy
+  image: google/cloud-sdk:alpine
+  before_script:
+    - echo $GCP_SERVICE_KEY | gcloud auth activate-service-account --key-file=-
+    - gcloud config set project ${GCP_PROJECT_ID}
+    - gcloud config set run/region ${GCP_REGION}
+  when: manual
+  allow_failure: false
+
+########################################
+# Automatic Rollback (On Health Check Failure)
+########################################
+
+rollback:auto:
+  extends: .rollback_template
+  environment:
+    name: production
+  script:
+    - echo "Automatic rollback triggered"
+    # Get current revision
+    - CURRENT=$(gcloud run services describe ${SERVICE_NAME}-web --format="value(status.latestReadyRevisionName)")
+    # Get previous stable revision
+    - PREVIOUS=$(gcloud run revisions list --service ${SERVICE_NAME}-web --format="value(name)" --limit=2 | tail -1)
+    - echo "Rolling back from ${CURRENT} to ${PREVIOUS}"
+    # Route 100% traffic to previous revision
+    - |
+      gcloud run services update-traffic ${SERVICE_NAME}-web \
+        --to-revisions=${PREVIOUS}=100
+    - echo "Rollback complete. All traffic routed to ${PREVIOUS}"
+  only:
+    - tags
+  rules:
+    - if: $ROLLBACK_TRIGGERED == "true"
+
+########################################
+# Manual Rollback to Previous Revision
+########################################
+
+rollback:prod:previous:
+  extends: .rollback_template
+  environment:
+    name: production
+  variables:
+    SERVICE_NAME: invoiceninja-prod
+  script:
+    # List last 5 revisions
+    - echo "Available revisions:"
+    - gcloud run revisions list --service ${SERVICE_NAME}-web --limit=5
+    # Get previous revision
+    - PREVIOUS=$(gcloud run revisions list --service ${SERVICE_NAME}-web --format="value(name)" --limit=2 | tail -1)
+    - echo "Rolling back to: ${PREVIOUS}"
+    # Route all traffic to previous revision
+    - |
+      gcloud run services update-traffic ${SERVICE_NAME}-web \
+        --to-revisions=${PREVIOUS}=100
+    # Verify rollback
+    - CURRENT_TRAFFIC=$(gcloud run services describe ${SERVICE_NAME}-web --format="value(status.traffic[0].percent)")
+    - echo "Rollback verification: ${CURRENT_TRAFFIC}% traffic on ${PREVIOUS}"
+  only:
+    - tags
+
+rollback:staging:previous:
+  extends: .rollback_template
+  environment:
+    name: staging
+  variables:
+    SERVICE_NAME: invoiceninja-staging
+  script:
+    - PREVIOUS=$(gcloud run revisions list --service ${SERVICE_NAME}-web --format="value(name)" --limit=2 | tail -1)
+    - |
+      gcloud run services update-traffic ${SERVICE_NAME}-web \
+        --to-revisions=${PREVIOUS}=100
+  only:
+    - main
+
+########################################
+# Rollback to Specific Revision
+########################################
+
+rollback:prod:specific:
+  extends: .rollback_template
+  environment:
+    name: production
+  variables:
+    SERVICE_NAME: invoiceninja-prod
+    # Set ROLLBACK_REVISION in CI/CD variables
+  script:
+    - |
+      if [ -z "$ROLLBACK_REVISION" ]; then
+        echo "Error: ROLLBACK_REVISION not set"
+        exit 1
+      fi
+    - echo "Rolling back to specific revision: ${ROLLBACK_REVISION}"
+    # Verify revision exists
+    - |
+      gcloud run revisions describe ${ROLLBACK_REVISION} --service ${SERVICE_NAME}-web || {
+        echo "Error: Revision ${ROLLBACK_REVISION} not found"
+        exit 1
+      }
+    # Route all traffic to specified revision
+    - |
+      gcloud run services update-traffic ${SERVICE_NAME}-web \
+        --to-revisions=${ROLLBACK_REVISION}=100
+    - echo "Rollback complete to ${ROLLBACK_REVISION}"
+  only:
+    - tags
+
+########################################
+# Database Rollback (with Backup Restore)
+########################################
+
+rollback:database:
+  stage: deploy
+  image: google/cloud-sdk:alpine
+  environment:
+    name: production
+  before_script:
+    - echo $GCP_SERVICE_KEY | gcloud auth activate-service-account --key-file=-
+    - gcloud config set project ${GCP_PROJECT_ID}
+  script:
+    - |
+      if [ -z "$BACKUP_ID" ]; then
+        echo "Error: BACKUP_ID not set. List backups with:"
+        echo "gcloud sql backups list --instance=${DB_INSTANCE}"
+        gcloud sql backups list --instance=${DB_INSTANCE} --limit=10
+        exit 1
+      fi
+    - echo "Restoring database from backup: ${BACKUP_ID}"
+    # Clone the instance to avoid downtime
+    - |
+      gcloud sql instances clone ${DB_INSTANCE} ${DB_INSTANCE}-rollback-$(date +%Y%m%d-%H%M%S) \
+        --backup-id=${BACKUP_ID}
+    - echo "Database cloned with backup ${BACKUP_ID}"
+    - echo "Manual action required: Update Cloud Run to use new instance"
+  variables:
+    DB_INSTANCE: invoiceninja-prod-db
+  when: manual
+  only:
+    - tags
+
+########################################
+# Terraform State Rollback
+########################################
+
+rollback:terraform:
+  stage: deploy
+  image: hashicorp/terraform:latest
+  before_script:
+    - echo $GCP_SERVICE_KEY > /tmp/gcp-key.json
+    - export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json
+  script:
+    - cd terraform/environments/${ENVIRONMENT}
+    - terraform init
+    # Show state versions
+    - terraform state list
+    - echo "To rollback terraform state, manually run:"
+    - echo "terraform state pull > backup.tfstate"
+    - echo "terraform state push <previous-state-file>"
+  variables:
+    ENVIRONMENT: prod
+  when: manual
+  only:
+    - tags
+
+########################################
+# Emergency Traffic Kill Switch
+########################################
+
+emergency:stop-traffic:
+  extends: .rollback_template
+  environment:
+    name: production
+  variables:
+    SERVICE_NAME: invoiceninja-prod
+  script:
+    - echo "EMERGENCY: Stopping all traffic to production"
+    # Scale service to 0 instances
+    - |
+      gcloud run services update ${SERVICE_NAME}-web \
+        --min-instances=0 \
+        --max-instances=0
+    - echo "All traffic stopped. Service scaled to 0 instances"
+    - echo "To restore: run 'traffic:rollout-100' job"
+  only:
+    - tags
+
+emergency:restore-traffic:
+  extends: .rollback_template
+  environment:
+    name: production
+  variables:
+    SERVICE_NAME: invoiceninja-prod
+  script:
+    - echo "Restoring production traffic"
+    # Restore normal scaling
+    - |
+      gcloud run services update ${SERVICE_NAME}-web \
+        --min-instances=2 \
+        --max-instances=50
+    - echo "Traffic restored. Service scaling reset to normal"
+  only:
+    - tags
+
+########################################
+# Post-Rollback Validation
+########################################
+
+rollback:validate:
+  stage: deploy
+  image: curlimages/curl:latest
+  environment:
+    name: production
+  script:
+    - echo "Validating rollback..."
+    - sleep 30  # Wait for rollback to propagate
+    # Health check
+    - |
+      for i in {1..5}; do
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" ${APP_URL}/health)
+        if [ $HTTP_CODE -eq 200 ]; then
+          echo "Health check passed (attempt $i)"
+          break
+        else
+          echo "Health check failed with $HTTP_CODE (attempt $i)"
+          if [ $i -eq 5 ]; then
+            exit 1
+          fi
+          sleep 10
+        fi
+      done
+    - echo "Rollback validation successful"
+  variables:
+    APP_URL: https://invoiceninja.example.com
+  only:
+    - tags
+
+########################################
+# Rollback Incident Report
+########################################
+
+rollback:report:
+  stage: deploy
+  image: alpine:latest
+  script:
+    - |
+      cat > rollback-report.md <<EOF
+      # Rollback Incident Report
+      
+      **Date**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+      **Pipeline**: ${CI_PIPELINE_URL}
+      **Triggered By**: ${GITLAB_USER_NAME}
+      **Commit**: ${CI_COMMIT_SHA}
+      
+      ## Timeline
+      - Deployment started: ${DEPLOY_TIME}
+      - Issue detected: ${ISSUE_TIME}
+      - Rollback initiated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+      
+      ## Reason for Rollback
+      ${ROLLBACK_REASON}
+      
+      ## Actions Taken
+      - Reverted to previous revision
+      - Validated health checks
+      - Monitored error rates
+      
+      ## Next Steps
+      - [ ] Root cause analysis
+      - [ ] Fix identified issues
+      - [ ] Update tests to prevent recurrence
+      - [ ] Schedule re-deployment
+      EOF
+      cat rollback-report.md
+  artifacts:
+    paths:
+      - rollback-report.md
+    expire_in: 1 month
+  when: on_failure
+  only:
+    - tags

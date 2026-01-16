@@ -1,19 +1,186 @@
-# GitLab CI/CD Configuration for Invoice Ninja on GCP
+# GitLab CI/CD Pipeline - Invoice Ninja GCP Production
+# Complete production-ready pipeline with security scanning and multi-environment deployment
 
-# Placeholder - will be implemented in Phase 3
-# This will include:
-# - Build stage (Docker images)
-# - Test stage (Unit tests, integration tests)
-# - Security stage (SAST, DAST, container scanning, secrets scanning)
-# - Deploy stage (dev, staging, prod)
-# - Monitoring stage (health checks, smoke tests)
+########################################
+# Pipeline Configuration
+########################################
+
+workflow:
+  rules:
+    # Run on merge requests
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    # Run on branches
+    - if: '$CI_COMMIT_BRANCH'
+    # Run on tags
+    - if: '$CI_COMMIT_TAG'
+
+# Global variables
+variables:
+  # Docker configuration
+  DOCKER_DRIVER: overlay2
+  DOCKER_BUILDKIT: "1"
+  
+  # GCP Artifact Registry
+  GCP_REGION: "us-central1"
+  REGISTRY_URL: "${GCP_REGION}-docker.pkg.dev"
+  
+  # Fail fast on errors
+  FF_USE_FASTZIP: "true"
+  CACHE_COMPRESSION_LEVEL: "fastest"
+
+# Global cache configuration
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - .trivycache/
+    - invoiceninja/vendor/
+    - invoiceninja/node_modules/
+
+########################################
+# Pipeline Stages
+########################################
 
 stages:
-  - build
-  - test
-  - security
-  - deploy
-  - monitor
+  - build       # Build Docker images
+  - test        # Run tests
+  - security    # Security scanning
+  - deploy      # Deploy to environments
+  - verify      # Post-deployment verification
+  - rollback    # Emergency rollback (manual)
 
-# TODO: Implement full pipeline
-# Reference: docs/LEARNING_PATH.md - Day 2
+########################################
+# Include Templates
+########################################
+
+include:
+  # Build templates
+  - local: '.gitlab/ci-templates/build.yml'
+  
+  # Test templates
+  - local: '.gitlab/ci-templates/test.yml'
+  
+  # Security scanning templates
+  - local: '.gitlab/ci-templates/security.yml'
+  
+  # Deployment templates
+  - local: '.gitlab/ci-templates/deploy.yml'
+  
+  # Rollback templates
+  - local: '.gitlab/ci-templates/rollback.yml'
+  
+  # Environment-specific variables
+  - local: '.gitlab/variables/dev.yml'
+  - local: '.gitlab/variables/staging.yml'
+  - local: '.gitlab/variables/prod.yml'
+
+########################################
+# Default Configuration
+########################################
+
+default:
+  # Retry configuration for all jobs
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
+  
+  # Interruptible by default (can be overridden)
+  interruptible: true
+  
+  # Tags for runner selection
+  tags:
+    - docker
+
+########################################
+# Pipeline Stages Execution Flow
+########################################
+
+# DEVELOPMENT FLOW:
+#   MR/develop branch:
+#     build → test → security → deploy:dev → smoke:dev
+#
+# STAGING FLOW:
+#   main branch:
+#     build → test → security → [manual] deploy:staging → smoke:staging
+#
+# PRODUCTION FLOW:
+#   version tag (v1.2.3):
+#     build → test → security → [manual] deploy:prod → canary → rollout-50 → rollout-100
+#
+# ROLLBACK FLOW (manual):
+#   Emergency: rollback:prod:previous OR emergency:stop-traffic
+
+########################################
+# Custom Jobs (Pipeline-Specific)
+########################################
+
+# Pipeline Success Notification
+notify:success:
+  stage: .post
+  image: curlimages/curl:latest
+  script:
+    - |
+      echo "Pipeline ${CI_PIPELINE_ID} completed successfully"
+      echo "Commit: ${CI_COMMIT_SHA}"
+      echo "Branch: ${CI_COMMIT_REF_NAME}"
+      # Add webhook notification here (Slack, Discord, etc.)
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: on_success
+    - if: '$CI_COMMIT_TAG'
+      when: on_success
+
+# Pipeline Failure Notification
+notify:failure:
+  stage: .post
+  image: curlimages/curl:latest
+  script:
+    - |
+      echo "⚠️ Pipeline ${CI_PIPELINE_ID} FAILED"
+      echo "Commit: ${CI_COMMIT_SHA}"
+      echo "Branch: ${CI_COMMIT_REF_NAME}"
+      echo "Failed Job: ${CI_JOB_NAME}"
+      # Add webhook notification here
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: on_failure
+    - if: '$CI_COMMIT_TAG'
+      when: on_failure
+
+########################################
+# Learning Resources
+########################################
+# 
+# This pipeline demonstrates:
+# 
+# 1. MULTI-STAGE PIPELINE
+#    - Build → Test → Security → Deploy → Verify
+# 
+# 2. ENVIRONMENT PROMOTION
+#    - dev (automatic) → staging (manual) → prod (manual, tags only)
+# 
+# 3. SECURITY-FIRST APPROACH
+#    - SAST (Semgrep, PHPStan)
+#    - Container scanning (Trivy)
+#    - Dependency scanning
+#    - Secrets scanning (TruffleHog, GitLeaks)
+#    - DAST (OWASP ZAP)
+# 
+# 4. BLUE-GREEN/CANARY DEPLOYMENTS
+#    - Deploy with --no-traffic
+#    - Gradual traffic shift: 10% → 50% → 100%
+#    - Easy rollback to previous revision
+# 
+# 5. ARTIFACTS & CACHING
+#    - Docker layer caching
+#    - Composer/npm dependency caching
+#    - Build artifacts shared between jobs
+# 
+# 6. APPROVAL GATES
+#    - Manual approval for staging
+#    - Manual approval for production
+#    - Tag-based production deployments
+#
+# Learn more: docs/LEARNING_PATH.md - Phase 2.1-2.2
+

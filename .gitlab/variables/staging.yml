@@ -1,0 +1,70 @@
+# Staging Environment Variables
+# Pre-production environment for final testing
+
+variables:
+  # Environment
+  ENVIRONMENT: "staging"
+  APP_ENV: "staging"
+  APP_DEBUG: "false"  # Production-like behavior
+  
+  # GCP Configuration
+  GCP_REGION: "us-central1"
+  GCP_PROJECT_ID: "your-project-id-staging"
+  
+  # Cloud Run Configuration
+  SERVICE_NAME: "invoiceninja-staging"
+  VPC_CONNECTOR: "staging-vpc-connector"
+  
+  # Service Account
+  SERVICE_ACCOUNT: "cloud-run-staging@your-project-id-staging.iam.gserviceaccount.com"
+  
+  # Resource Limits (Production-like)
+  MEMORY: "1Gi"
+  CPU: "2"
+  MIN_INSTANCES: "1"  # Always warm
+  MAX_INSTANCES: "10"
+  CONCURRENCY: "100"
+  TIMEOUT: "300"
+  
+  # Worker Configuration
+  WORKER_MEMORY: "1Gi"
+  WORKER_CPU: "1"
+  WORKER_MIN_INSTANCES: "1"
+  WORKER_MAX_INSTANCES: "5"
+  
+  # Database
+  DB_INSTANCE: "invoiceninja-staging-db"
+  DB_CONNECTION: "pgsql"
+  DB_DATABASE: "invoiceninja_staging"
+  DB_USERNAME: "invoiceninja"
+  # DB_PASSWORD stored in GitLab CI/CD variables (protected)
+  
+  # Redis
+  REDIS_HOST: "10.2.0.3"  # Internal IP
+  REDIS_PORT: "6379"
+  # REDIS_PASSWORD stored in GitLab CI/CD variables
+  
+  # Queue
+  QUEUE_CONNECTION: "redis"
+  
+  # Storage
+  STORAGE_BUCKET: "invoiceninja-staging-storage"
+  
+  # Monitoring
+  LOG_LEVEL: "info"
+  
+  # DAST Target URL
+  DAST_WEBSITE: "https://invoiceninja-staging-your-project-id-staging.run.app"
+  
+  # Feature Flags (staging tests upcoming features)
+  ENABLE_NEW_FEATURES: "true"
+  ENABLE_DEBUG_TOOLBAR: "false"
+  
+  # Performance Testing
+  ENABLE_PROFILING: "true"
+
+# Pipeline rules for staging
+.staging_rules:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: manual  # Require manual approval
