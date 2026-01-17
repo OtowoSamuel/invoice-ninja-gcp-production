@@ -12,7 +12,7 @@
     DOCKER_TLS_CERTDIR: "/certs"
   before_script:
     # Authenticate to GCP Artifact Registry
-    - echo $GCP_SERVICE_KEY | docker login -u _json_key --password-stdin https://${GCP_REGION}-docker.pkg.dev
+    - cat $GCP_SERVICE_KEY | docker login -u _json_key --password-stdin https://${GCP_REGION}-docker.pkg.dev
   script:
     # Build with cache from previous builds
     - |
@@ -48,7 +48,20 @@ build:web:
       dotenv: build-web.env
     expire_in: 1 day
   script:
-    - !reference [.build_template, script]
+    # Build with cache from previous builds
+    - |
+      docker build \
+        --cache-from ${IMAGE_NAME}:latest \
+        --build-arg BUILDKIT_INLINE_CACHE=1 \
+        --tag ${IMAGE_NAME}:${CI_COMMIT_SHA} \
+        --tag ${IMAGE_NAME}:${CI_COMMIT_REF_SLUG} \
+        --tag ${IMAGE_NAME}:latest \
+        --file ${DOCKERFILE_PATH} \
+        .
+    # Push all tags
+    - docker push ${IMAGE_NAME}:${CI_COMMIT_SHA}
+    - docker push ${IMAGE_NAME}:${CI_COMMIT_REF_SLUG}
+    - docker push ${IMAGE_NAME}:latest
     # Export image info for downstream jobs
     - echo "WEB_IMAGE=${IMAGE_NAME}:${CI_COMMIT_SHA}" >> build-web.env
     - echo "WEB_IMAGE_TAG=${CI_COMMIT_SHA}" >> build-web.env
@@ -64,7 +77,20 @@ build:worker:
       dotenv: build-worker.env
     expire_in: 1 day
   script:
-    - !reference [.build_template, script]
+    # Build with cache from previous builds
+    - |
+      docker build \
+        --cache-from ${IMAGE_NAME}:latest \
+        --build-arg BUILDKIT_INLINE_CACHE=1 \
+        --tag ${IMAGE_NAME}:${CI_COMMIT_SHA} \
+        --tag ${IMAGE_NAME}:${CI_COMMIT_REF_SLUG} \
+        --tag ${IMAGE_NAME}:latest \
+        --file ${DOCKERFILE_PATH} \
+        .
+    # Push all tags
+    - docker push ${IMAGE_NAME}:${CI_COMMIT_SHA}
+    - docker push ${IMAGE_NAME}:${CI_COMMIT_REF_SLUG}
+    - docker push ${IMAGE_NAME}:latest
     # Export image info for downstream jobs
     - echo "WORKER_IMAGE=${IMAGE_NAME}:${CI_COMMIT_SHA}" >> build-worker.env
     - echo "WORKER_IMAGE_TAG=${CI_COMMIT_SHA}" >> build-worker.env
