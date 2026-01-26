@@ -26,5 +26,5 @@ output "database_user" {
 
 output "db_password_secret_id" {
   description = "Secret Manager secret ID for database password"
-  value       = google_secret_manager_secret.db_password.id
+  value       = google_secret_manager_secret.db_password.secret_id
 }

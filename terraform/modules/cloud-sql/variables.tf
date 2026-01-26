@@ -18,6 +18,12 @@ variable "network_id" {
   type        = string
 }
 
+variable "vpc_connection" {
+  description = "VPC connection dependency"
+  type        = string
+  default     = ""
+}
+
 variable "database_name" {
   description = "PostgreSQL database name"
   type        = string

@@ -18,11 +18,13 @@ resource "google_compute_subnetwork" "vpc_connector_subnet" {
 
 # Serverless VPC Connector (for Cloud Run to access Cloud SQL via private IP)
 resource "google_vpc_access_connector" "connector" {
-  name          = "invoice-ninja-${var.env}-connector"
-  region        = var.region
-  project       = var.project_id
-  network       = google_compute_network.vpc.name
-  ip_cidr_range = var.vpc_connector_cidr
+  name    = "in-${var.env}-connector"  # Shortened to meet 25-char limit
+  region  = var.region
+  project = var.project_id
+  
+  subnet {
+    name = google_compute_subnetwork.vpc_connector_subnet.name
+  }
   
   min_instances = 2
   max_instances = 3

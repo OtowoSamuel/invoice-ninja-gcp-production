@@ -14,7 +14,7 @@ resource "google_sql_database_instance" "main" {
   project          = var.project_id
 
   # Depends on private VPC connection
-  depends_on = [var.network_id]
+  depends_on = [var.vpc_connection]
 
   settings {
     tier              = var.tier
@@ -38,7 +38,7 @@ resource "google_sql_database_instance" "main" {
     ip_configuration {
       ipv4_enabled    = false  # No public IP
       private_network = var.network_id
-      require_ssl     = true
+      ssl_mode        = "ENCRYPTED_ONLY"  # Replaces deprecated require_ssl
     }
 
     # Maintenance window
@@ -56,12 +56,12 @@ resource "google_sql_database_instance" "main" {
 
     database_flags {
       name  = "shared_buffers"
-      value = "256MB"
+      value = "65536"  # 64MB in KB (suitable for db-f1-micro)
     }
 
     database_flags {
       name  = "effective_cache_size"
-      value = "1GB"
+      value = "81920"  # 80MB in KB (max for db-f1-micro is ~90MB)
     }
   }
 

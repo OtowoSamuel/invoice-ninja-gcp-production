@@ -18,6 +18,11 @@ output "vpc_connector_name" {
   value       = google_vpc_access_connector.connector.name
 }
 
+output "vpc_connection" {
+  description = "Private VPC connection for Cloud SQL dependency"
+  value       = google_service_networking_connection.private_vpc_connection.network
+}
+
 output "private_vpc_connection" {
   description = "Private VPC connection for Cloud SQL"
   value       = google_service_networking_connection.private_vpc_connection.network
