@@ -120,6 +120,10 @@ COPY docker/web/default.conf /etc/nginx/http.d/default.conf
 # Configure Supervisor (manages nginx + php-fpm)
 COPY docker/web/supervisord.conf /etc/supervisord.conf
 
+# Copy entrypoint script
+COPY docker/web/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
 # Set proper permissions
 RUN chown -R invoiceninja:invoiceninja /var/www/html \
     && chmod -R 755 /var/www/html/storage \
@@ -140,5 +144,5 @@ EXPOSE 8080
 USER root
 
 # ENTRYPOINT: What runs when container starts
-# Supervisor manages both nginx and php-fpm as subprocesses
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
+# Runs entrypoint script that configures Laravel and starts supervisor
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

@@ -9,14 +9,14 @@ variables:
   
   # GCP Configuration
   GCP_REGION: "us-central1"
-  GCP_PROJECT_ID: "your-project-id-dev"
+  GCP_PROJECT_ID: "invoice-ninja-prod"
   
   # Cloud Run Configuration
-  SERVICE_NAME: "invoiceninja-dev"
-  VPC_CONNECTOR: "dev-vpc-connector"
+  SERVICE_NAME: "invoice-ninja"
+  VPC_CONNECTOR: "in-dev-connector"
   
   # Service Account
-  SERVICE_ACCOUNT: "cloud-run-dev@your-project-id-dev.iam.gserviceaccount.com"
+  SERVICE_ACCOUNT: "invoice-ninja-dev-run-sa@invoice-ninja-prod.iam.gserviceaccount.com"
   
   # Resource Limits (Conservative for dev)
   MEMORY: "512Mi"
@@ -33,16 +33,17 @@ variables:
   WORKER_MAX_INSTANCES: "2"
   
   # Database
-  DB_INSTANCE: "invoiceninja-dev-db"
+  DB_INSTANCE: "invoice-ninja-dev-db"
   DB_CONNECTION: "pgsql"
-  DB_DATABASE: "invoiceninja_dev"
+  DB_DATABASE: "invoiceninja"
   DB_USERNAME: "invoiceninja"
-  # DB_PASSWORD stored in GitLab CI/CD variables (protected)
+  # DB_PASSWORD stored in Secret Manager (invoice-ninja-dev-db-password)
+  DB_CONNECTION_NAME: "invoice-ninja-prod:us-central1:invoice-ninja-dev-db"
   
-  # Redis
-  REDIS_HOST: "10.1.0.3"  # Internal IP
+  # Redis (TODO: Deploy Redis to Cloud Memorystore)
+  REDIS_HOST: "10.1.0.3"  # Internal IP - placeholder
   REDIS_PORT: "6379"
-  # REDIS_PASSWORD stored in GitLab CI/CD variables
+  # REDIS_PASSWORD stored in Secret Manager (invoice-ninja-dev-redis-password)
   
   # Queue
   QUEUE_CONNECTION: "redis"

@@ -68,10 +68,11 @@ module "cloud_sql" {
   database_user  = var.database_user
   
   # Dev tier - small instance
-  tier                 = "db-f1-micro"
-  availability_type    = "ZONAL"
-  backup_enabled       = true
+  tier                   = "db-f1-micro"
+  availability_type      = "ZONAL"
+  backup_enabled         = true
   point_in_time_recovery = false  # Save cost in dev
+  deletion_protection    = false  # Easy to tear down dev
 }
 
 # Cloud Run Module - Web Application
