@@ -44,6 +44,19 @@ module "iam" {
   env        = "dev"
 }
 
+# Artifact Registry for Docker Images
+module "artifact_registry" {
+  source = "../../modules/artifact-registry"
+
+  project_id                 = var.project_id
+  region                     = var.region
+  env                        = "dev"
+  repository_id              = "invoiceninja"
+  description                = "Invoice Ninja Docker images for dev environment"
+  deployer_service_account   = module.iam.deployer_sa_email
+  cloud_run_service_account  = module.iam.cloud_run_sa_email
+}
+
 # Secrets Module
 module "secrets" {
   source = "../../modules/secrets"

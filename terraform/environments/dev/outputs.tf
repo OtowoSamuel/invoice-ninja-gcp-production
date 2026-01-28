@@ -28,3 +28,8 @@ output "service_account_email" {
   description = "Cloud Run service account email"
   value       = module.iam.cloud_run_sa_email
 }
+
+output "artifact_registry_url" {
+  description = "Artifact Registry repository URL for docker push/pull"
+  value       = module.artifact_registry.repository_url
+}

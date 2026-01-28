@@ -43,7 +43,7 @@ WORKDIR /app
 # Copy package files first (layer caching again!)
 COPY invoiceninja/package*.json ./
 
-# Install npm dependencies
+# Install npm dependenciesx 
 RUN npm ci --production=false
 
 # Copy source files needed for build
