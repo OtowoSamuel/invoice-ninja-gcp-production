@@ -8,7 +8,7 @@
     max: 2
 
 ########################################
-# SAST - Static Application Security Testing
+# SAST - Static Application Security Testing (white-box" testing method that analyzes application source code, byte code, or binaries without executing the program to identify vulnerabilities early in the software development lifecycle (SDLC)
 ########################################
 
 sast:semgrep:
@@ -170,7 +170,7 @@ security:gitleaks:
     expire_in: 1 week
 
 ########################################
-# DAST - Dynamic Application Security Testing
+# DAST - Dynamic Application Security Testing (DAST is a “Black-Box” testing, can find security vulnerabilities and weaknesses in a running application by injecting malicious payloads.)
 ########################################
 
 security:dast:zap:

@@ -43,10 +43,37 @@ resource "google_compute_global_address" "private_ip_range" {
 }
 
 # Private VPC connection for Cloud SQL
+#
+# KNOWN LIMITATION: GCP has a race condition where Cloud SQL async deletion
+# doesn't immediately release the VPC Service Connection. This can cause
+# "Producer services still using this connection" errors during terraform destroy.
+#
+# MITIGATION:
+# - deletion_policy = "ABANDON" prevents terraform from waiting forever
+# - GCP automatically cleans up the connection after Cloud SQL deletion completes
+# - Timeouts prevent hanging on transient API issues
+#
+# REFERENCE:
+# - GitHub Issue: https://github.com/hashicorp/terraform-provider-google/issues/5441
+# - If destroy fails with VPC error, manually fix with:
+#   terraform state rm module.networking.google_service_networking_connection.private_vpc_connection
+#
 resource "google_service_networking_connection" "private_vpc_connection" {
   network                 = google_compute_network.vpc.id
   service                 = "servicenetworking.googleapis.com"
   reserved_peering_ranges = [google_compute_global_address.private_ip_range.name]
+
+  # Best practice: Abandon the connection gracefully instead of waiting forever
+  # This prevents terraform destroy from hanging on GCP's async API operations
+  deletion_policy = "ABANDON"
+
+  # Prevent hanging on transient API issues
+  timeouts {
+    create = "10m"
+    delete = "10m"
+  }
+
+  depends_on = [google_compute_global_address.private_ip_range]
 }
 
 # Firewall rule: Allow health checks from Google Load Balancers
