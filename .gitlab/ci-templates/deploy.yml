@@ -18,25 +18,7 @@
 .deploy_web:
   extends: .deploy_template
   script:
-    - >
-      gcloud run deploy ${SERVICE_NAME}-web
-      --image ${WEB_IMAGE}
-      --platform managed
-      --region ${GCP_REGION}
-      --allow-unauthenticated
-      --vpc-connector ${VPC_CONNECTOR}
-      --add-cloudsql-instances ${DB_CONNECTION_NAME}
-      --set-env-vars="APP_ENV=${ENVIRONMENT},APP_DEBUG=${APP_DEBUG},DB_CONNECTION=${DB_CONNECTION},DB_DATABASE=${DB_DATABASE},DB_USERNAME=${DB_USERNAME}"
-      --set-secrets="APP_KEY=invoice-ninja-${ENVIRONMENT}-app-key:latest,DB_PASSWORD=invoice-ninja-${ENVIRONMENT}-db-password:latest"
-      --memory ${MEMORY:-512Mi}
-      --cpu ${CPU:-1}
-      --min-instances ${MIN_INSTANCES:-0}
-      --max-instances ${MAX_INSTANCES:-10}
-      --concurrency ${CONCURRENCY:-80}
-      --timeout ${TIMEOUT:-300}
-      --labels="app=invoiceninja,component=web,environment=${ENVIRONMENT}"
-      --service-account ${SERVICE_ACCOUNT}
-      --no-traffic
+    - gcloud run deploy ${SERVICE_NAME}-web --image ${WEB_IMAGE} --platform managed --region ${GCP_REGION} --allow-unauthenticated --vpc-connector ${VPC_CONNECTOR} --add-cloudsql-instances ${DB_CONNECTION_NAME} --set-env-vars="APP_ENV=${ENVIRONMENT},APP_DEBUG=${APP_DEBUG},DB_CONNECTION=${DB_CONNECTION},DB_DATABASE=${DB_DATABASE},DB_USERNAME=${DB_USERNAME}" --set-secrets="APP_KEY=invoice-ninja-${ENVIRONMENT}-app-key:latest,DB_PASSWORD=invoice-ninja-${ENVIRONMENT}-db-password:latest" --memory ${MEMORY:-512Mi} --cpu ${CPU:-1} --min-instances ${MIN_INSTANCES:-0} --max-instances ${MAX_INSTANCES:-10} --concurrency ${CONCURRENCY:-80} --timeout ${TIMEOUT:-300} --labels="app=invoiceninja,component=web,environment=${ENVIRONMENT}" --service-account ${SERVICE_ACCOUNT} --no-traffic
     - NEW_REVISION=$(gcloud run revisions list --service ${SERVICE_NAME}-web --format="value(name)" --limit=1)
     - echo "NEW_REVISION=${NEW_REVISION}" >> deploy.env
     - echo "Deployed revision: ${NEW_REVISION}"
@@ -48,21 +30,7 @@
 .deploy_worker:
   extends: .deploy_template
   script:
-    - >
-      gcloud run deploy ${SERVICE_NAME}-worker
-      --image ${WORKER_IMAGE}
-      --platform managed
-      --region ${GCP_REGION}
-      --no-allow-unauthenticated
-      --vpc-connector ${VPC_CONNECTOR}
-      --set-env-vars="APP_ENV=${ENVIRONMENT},QUEUE_CONNECTION=redis"
-      --set-secrets="APP_KEY=app-key:latest,DB_PASSWORD=db-password:latest,REDIS_PASSWORD=redis-password:latest"
-      --memory ${WORKER_MEMORY:-1Gi}
-      --cpu ${WORKER_CPU:-1}
-      --min-instances ${WORKER_MIN_INSTANCES:-1}
-      --max-instances ${WORKER_MAX_INSTANCES:-5}
-      --labels="app=invoiceninja,component=worker,environment=${ENVIRONMENT}"
-      --service-account ${SERVICE_ACCOUNT}
+    - gcloud run deploy ${SERVICE_NAME}-worker --image ${WORKER_IMAGE} --platform managed --region ${GCP_REGION} --no-allow-unauthenticated --vpc-connector ${VPC_CONNECTOR} --set-env-vars="APP_ENV=${ENVIRONMENT},QUEUE_CONNECTION=redis" --set-secrets="APP_KEY=app-key:latest,DB_PASSWORD=db-password:latest,REDIS_PASSWORD=redis-password:latest" --memory ${WORKER_MEMORY:-1Gi} --cpu ${WORKER_CPU:-1} --min-instances ${WORKER_MIN_INSTANCES:-1} --max-instances ${WORKER_MAX_INSTANCES:-5} --labels="app=invoiceninja,component=worker,environment=${ENVIRONMENT}" --service-account ${SERVICE_ACCOUNT}
 
 ########################################
 # Development Deployment
