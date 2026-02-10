@@ -198,11 +198,9 @@ security:dast:zap:
     expire_in: 1 week
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
-      when: manual
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      when: manual
     - if: '$CI_COMMIT_BRANCH == "main"'
-      when: manual
+  when: manual
 
 ########################################
 # License Compliance Scanning
