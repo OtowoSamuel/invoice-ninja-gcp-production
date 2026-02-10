@@ -11,6 +11,7 @@
     DOCKER_BUILDKIT: 1
     DOCKER_TLS_CERTDIR: "/certs"
   before_script:
+    - git submodule update --init --recursive --depth 20
     - echo "$GCP_SERVICE_KEY" > /tmp/gcp-key.json
     - cat /tmp/gcp-key.json | docker login -u _json_key --password-stdin https://${GCP_REGION}-docker.pkg.dev
     - rm /tmp/gcp-key.json

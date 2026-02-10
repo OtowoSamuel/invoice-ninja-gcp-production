@@ -87,6 +87,10 @@ default:
   
   # Interruptible by default (can be overridden)
   interruptible: true
+  
+  # Initialize Git submodules (Invoice Ninja)
+  before_script:
+    - git submodule update --init --recursive --depth 20
 
 ########################################
 # Pipeline Stages Execution Flow
