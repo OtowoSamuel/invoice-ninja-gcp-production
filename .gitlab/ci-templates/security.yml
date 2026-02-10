@@ -196,11 +196,13 @@ security:dast:zap:
       - zap-api-report.html
       - zap-api-report.json
     expire_in: 1 week
-  only:
-    - schedules  # Run on scheduled pipelines
-    - merge_requests
-    - main
-  when: manual  # Manual trigger for DAST (can be slow)
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: manual
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: manual
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
 
 ########################################
 # License Compliance Scanning
