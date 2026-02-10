@@ -175,12 +175,12 @@ security:gitleaks:
 
 security:dast:zap:
   extends: .security_template
-  stage: security
+  stage: verify
   image: owasp/zap2docker-stable:latest
   variables:
-    ZAP_TARGET_URL: "${DAST_WEBSITE}"  # Set in CI/CD variables
-  dependencies:
-    - deploy:dev  # Run after dev deployment
+    ZAP_TARGET_URL: "${DAST_WEBSITE}"
+  needs:
+    - deploy:dev
   script:
     # Baseline scan (passive scan)
     - zap-baseline.py -t ${ZAP_TARGET_URL} -r zap-baseline-report.html -J zap-baseline-report.json || true

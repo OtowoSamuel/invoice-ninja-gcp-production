@@ -372,3 +372,18 @@ destroy:staging:
   when: manual
   only:
     - main
+
+destroy:prod:
+  extends: .deploy_template
+  stage: deploy
+  environment:
+    name: production
+    action: stop
+  script:
+    - gcloud run services delete ${SERVICE_NAME}-web --quiet || true
+    - gcloud run services delete ${SERVICE_NAME}-worker --quiet || true
+  variables:
+    SERVICE_NAME: invoiceninja-prod
+  when: manual
+  only:
+    - tags
