@@ -53,10 +53,10 @@ build:web:
         --tag ${IMAGE_NAME}:latest \
         --file ${DOCKERFILE_PATH} \
         .
-    - docker push ${IMAGE_NAME}:${CI_COMMIT_SHA}
-    - docker push ${IMAGE_NAME}:${CI_COMMIT_REF_SLUG}
-    - docker push ${IMAGE_NAME}:latest
-    - echo "WEB_IMAGE=${IMAGE_NAME}:${CI_COMMIT_SHA}" >> build-web.env
+    - docker push ${IMAGE_NAME}:${CI_COMMIT_SHA} || exit 1
+    - docker push ${IMAGE_NAME}:${CI_COMMIT_REF_SLUG} || exit 1
+    - docker push ${IMAGE_NAME}:latest || exit 1
+    - echo "WEB_IMAGE=${IMAGE_NAME}:${CI_COMMIT_SHA}" > build-web.env
     - echo "WEB_IMAGE_TAG=${CI_COMMIT_SHA}" >> build-web.env
 
 # Worker Build Job
@@ -79,10 +79,10 @@ build:worker:
         --tag ${IMAGE_NAME}:latest \
         --file ${DOCKERFILE_PATH} \
         .
-    - docker push ${IMAGE_NAME}:${CI_COMMIT_SHA}
-    - docker push ${IMAGE_NAME}:${CI_COMMIT_REF_SLUG}
-    - docker push ${IMAGE_NAME}:latest
-    - echo "WORKER_IMAGE=${IMAGE_NAME}:${CI_COMMIT_SHA}" >> build-worker.env
+    - docker push ${IMAGE_NAME}:${CI_COMMIT_SHA} || exit 1
+    - docker push ${IMAGE_NAME}:${CI_COMMIT_REF_SLUG} || exit 1
+    - docker push ${IMAGE_NAME}:latest || exit 1
+    - echo "WORKER_IMAGE=${IMAGE_NAME}:${CI_COMMIT_SHA}" > build-worker.env
     - echo "WORKER_IMAGE_TAG=${CI_COMMIT_SHA}" >> build-worker.env
 
 # Multi-Architecture Build (Advanced)
