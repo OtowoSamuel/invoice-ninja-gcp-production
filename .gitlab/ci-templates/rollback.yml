@@ -31,8 +31,6 @@ rollback:auto:
       gcloud run services update-traffic ${SERVICE_NAME}-web \
         --to-revisions=${PREVIOUS}=100
     - echo "Rollback complete. All traffic routed to ${PREVIOUS}"
-  only:
-    - tags
   rules:
     - if: $ROLLBACK_TRIGGERED == "true"
 
