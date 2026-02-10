@@ -18,7 +18,6 @@
 .deploy_web:
   extends: .deploy_template
   script:
-    # Deploy web service to Cloud Run
     - >
       gcloud run deploy ${SERVICE_NAME}-web
       --image ${WEB_IMAGE}
@@ -38,7 +37,6 @@
       --labels="app=invoiceninja,component=web,environment=${ENVIRONMENT}"
       --service-account ${SERVICE_ACCOUNT}
       --no-traffic
-    # Get the new revision name
     - NEW_REVISION=$(gcloud run revisions list --service ${SERVICE_NAME}-web --format="value(name)" --limit=1)
     - echo "NEW_REVISION=${NEW_REVISION}" >> deploy.env
     - echo "Deployed revision: ${NEW_REVISION}"
@@ -50,7 +48,6 @@
 .deploy_worker:
   extends: .deploy_template
   script:
-    # Deploy worker service to Cloud Run
     - >
       gcloud run deploy ${SERVICE_NAME}-worker
       --image ${WORKER_IMAGE}
