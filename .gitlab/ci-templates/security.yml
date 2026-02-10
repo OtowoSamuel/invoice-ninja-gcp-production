@@ -180,7 +180,8 @@ security:dast:zap:
   variables:
     ZAP_TARGET_URL: "${DAST_WEBSITE}"
   needs:
-    - deploy:dev
+    - job: deploy:dev
+      optional: true
   script:
     # Baseline scan (passive scan)
     - zap-baseline.py -t ${ZAP_TARGET_URL} -r zap-baseline-report.html -J zap-baseline-report.json || true
