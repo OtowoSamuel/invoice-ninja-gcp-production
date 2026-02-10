@@ -87,10 +87,6 @@ default:
   
   # Interruptible by default (can be overridden)
   interruptible: true
-  
-  # Tags for runner selection
-  tags:
-    - docker
 
 ########################################
 # Pipeline Stages Execution Flow
