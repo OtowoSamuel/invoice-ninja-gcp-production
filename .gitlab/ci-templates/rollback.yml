@@ -52,14 +52,14 @@ rollback:prod:previous:
     - gcloud run revisions list --service ${SERVICE_NAME}-web --limit=5
     # Get previous revision
     - PREVIOUS=$(gcloud run revisions list --service ${SERVICE_NAME}-web --format="value(name)" --limit=2 | tail -1)
-    - echo "Rolling back to: ${PREVIOUS}"
+    - 'echo "Rolling back to: ${PREVIOUS}"'
     # Route all traffic to previous revision
     - |
       gcloud run services update-traffic ${SERVICE_NAME}-web \
         --to-revisions=${PREVIOUS}=100
     # Verify rollback
     - CURRENT_TRAFFIC=$(gcloud run services describe ${SERVICE_NAME}-web --format="value(status.traffic[0].percent)")
-    - echo "Rollback verification: ${CURRENT_TRAFFIC}% traffic on ${PREVIOUS}"
+    - 'echo "Rollback verification: ${CURRENT_TRAFFIC}% traffic on ${PREVIOUS}"'
   only:
     - tags
 
@@ -94,7 +94,7 @@ rollback:prod:specific:
         echo "Error: ROLLBACK_REVISION not set"
         exit 1
       fi
-    - echo "Rolling back to specific revision: ${ROLLBACK_REVISION}"
+    - 'echo "Rolling back to specific revision: ${ROLLBACK_REVISION}"'
     # Verify revision exists
     - |
       gcloud run revisions describe ${ROLLBACK_REVISION} --service ${SERVICE_NAME}-web || {
@@ -129,13 +129,13 @@ rollback:database:
         gcloud sql backups list --instance=${DB_INSTANCE} --limit=10
         exit 1
       fi
-    - echo "Restoring database from backup: ${BACKUP_ID}"
+    - 'echo "Restoring database from backup: ${BACKUP_ID}"'
     # Clone the instance to avoid downtime
     - |
       gcloud sql instances clone ${DB_INSTANCE} ${DB_INSTANCE}-rollback-$(date +%Y%m%d-%H%M%S) \
         --backup-id=${BACKUP_ID}
     - echo "Database cloned with backup ${BACKUP_ID}"
-    - echo "Manual action required: Update Cloud Run to use new instance"
+    - 'echo "Manual action required: Update Cloud Run to use new instance"'
   variables:
     DB_INSTANCE: invoiceninja-prod-db
   when: manual
@@ -177,14 +177,14 @@ emergency:stop-traffic:
   variables:
     SERVICE_NAME: invoiceninja-prod
   script:
-    - echo "EMERGENCY: Stopping all traffic to production"
+    - 'echo "EMERGENCY: Stopping all traffic to production"'
     # Scale service to 0 instances
     - |
       gcloud run services update ${SERVICE_NAME}-web \
         --min-instances=0 \
         --max-instances=0
     - echo "All traffic stopped. Service scaled to 0 instances"
-    - echo "To restore: run 'traffic:rollout-100' job"
+    - 'echo "To restore: run traffic:rollout-100 job"'
   only:
     - tags
 

@@ -39,7 +39,7 @@
         --no-traffic
     - NEW_REVISION=$(gcloud run revisions list --service ${SERVICE_NAME}-web --format="value(name)" --limit=1)
     - echo "NEW_REVISION=${NEW_REVISION}" >> deploy.env
-    - echo "Deployed revision: ${NEW_REVISION}"
+    - 'echo "Deployed revision: ${NEW_REVISION}"'
   artifacts:
     reports:
       dotenv: deploy.env
@@ -106,7 +106,7 @@ deploy:dev:
         --no-traffic
     - NEW_REVISION=$(gcloud run revisions list --service ${SERVICE_NAME}-web --format="value(name)" --limit=1)
     - echo "NEW_REVISION=${NEW_REVISION}" >> deploy.env
-    - echo "Deployed revision: ${NEW_REVISION}"
+    - 'echo "Deployed revision: ${NEW_REVISION}"'
   artifacts:
     reports:
       dotenv: deploy.env
@@ -254,7 +254,7 @@ traffic:canary:
     - |
       gcloud run services update-traffic ${SERVICE_NAME}-web \
         --to-revisions=${NEW_REVISION}=10,LATEST=90
-    - echo "Canary deployment: 10% traffic to ${NEW_REVISION}"
+    - 'echo "Canary deployment: 10% traffic to ${NEW_REVISION}"'
   only:
     - tags
   when: manual
@@ -268,7 +268,7 @@ traffic:rollout-50:
     - |
       gcloud run services update-traffic ${SERVICE_NAME}-web \
         --to-revisions=${NEW_REVISION}=50,LATEST=50
-    - echo "Rollout: 50% traffic to ${NEW_REVISION}"
+    - 'echo "Rollout: 50% traffic to ${NEW_REVISION}"'
   only:
     - tags
   when: manual
@@ -282,7 +282,7 @@ traffic:rollout-100:
     - |
       gcloud run services update-traffic ${SERVICE_NAME}-web \
         --to-latest
-    - echo "Full rollout: 100% traffic to latest"
+    - 'echo "Full rollout: 100% traffic to latest"'
   only:
     - tags
   when: manual
