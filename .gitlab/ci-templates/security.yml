@@ -50,7 +50,7 @@ sast:phpstan:
     - phpstan analyse --level=max --error-format=json > phpstan-security.json || true
   artifacts:
     paths:
-      - phpstan-security.json
+      - invoiceninja/phpstan-security.json
     expire_in: 1 week
 
 ########################################
