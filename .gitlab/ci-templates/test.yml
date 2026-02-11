@@ -6,8 +6,8 @@
   image: php:8.2-cli-alpine
   before_script:
     # Install dependencies
-    - apk add --no-cache git postgresql-dev ${PHP_EXT_INSTALL:-}
-    - docker-php-ext-install pdo_pgsql ${PHP_EXT_INSTALL:-}
+    - apk add --no-cache git postgresql-dev libzip-dev libpng-dev libjpeg-turbo-dev freetype-dev
+    - docker-php-ext-install pdo_pgsql bcmath zip gd
     # Initialize submodules
     - rm -rf invoiceninja
     - git submodule update --init --recursive --depth 20
