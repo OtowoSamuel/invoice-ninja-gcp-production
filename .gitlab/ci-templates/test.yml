@@ -49,7 +49,6 @@ test:code-quality:
     - git submodule update --init --recursive --depth 20
     - cd invoiceninja
     - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
-    - cd invoiceninja
     - composer global require phpstan/phpstan
     - export PATH="$PATH:$HOME/.composer/vendor/bin"
   script:
@@ -72,7 +71,6 @@ test:code-style:
     - composer global require squizlabs/php_codesniffer
     - export PATH="$PATH:$HOME/.composer/vendor/bin"
   script:
-    - cd invoiceninja
     - phpcs --standard=PSR12 --report=gitlab app/ > phpcs-report.json || true
   artifacts:
     reports:
