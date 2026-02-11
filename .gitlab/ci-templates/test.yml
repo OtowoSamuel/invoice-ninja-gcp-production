@@ -92,8 +92,25 @@ test:integration:
     APP_ENV: testing
     APP_DEBUG: "true"
   script:
-    - cp .env.example .env || touch .env
-    - php artisan key:generate
+    # Create minimal .env file for Laravel
+    - |
+      cat > .env << EOF
+      APP_NAME="Invoice Ninja"
+      APP_ENV=testing
+      APP_DEBUG=true
+      APP_URL=http://localhost
+      APP_KEY=
+      DB_CONNECTION=pgsql
+      DB_HOST=postgres
+      DB_PORT=5432
+      DB_DATABASE=testing
+      DB_USERNAME=invoiceninja
+      DB_PASSWORD=testing
+      CACHE_DRIVER=array
+      SESSION_DRIVER=array
+      QUEUE_CONNECTION=sync
+      EOF
+    - php artisan key:generate --force
     - php artisan migrate --force
     - php artisan test --testsuite=Integration
   artifacts:
