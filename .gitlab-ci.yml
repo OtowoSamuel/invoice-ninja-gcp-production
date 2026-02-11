@@ -90,6 +90,15 @@ default:
   
   # Initialize Git submodules (Invoice Ninja)
   before_script:
+    - |
+      # Install git if not present (Alpine images need this)
+      if ! command -v git &> /dev/null; then
+        if command -v apk &> /dev/null; then
+          apk add --no-cache git
+        elif command -v apt-get &> /dev/null; then
+          apt-get update && apt-get install -y git
+        fi
+      fi
     - git submodule update --init --recursive --depth 20
 
 ########################################

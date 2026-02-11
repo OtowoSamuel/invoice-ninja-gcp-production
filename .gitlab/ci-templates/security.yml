@@ -40,7 +40,7 @@ sast:phpstan:
     - git submodule update --init --recursive --depth 20
     - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
     - cd invoiceninja
-    - composer install --no-dev --no-interaction
+    - composer install --no-dev --no-interaction --prefer-dist
   script:
     # Run PHPStan for static analysis
     - composer global require phpstan/phpstan
