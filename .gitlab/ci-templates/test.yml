@@ -5,6 +5,8 @@
   stage: test
   image: php:8.2-cli-alpine
   before_script:
+    # Initialize submodules
+    - git submodule update --init --recursive --depth 20
     # Install dependencies
     - apk add --no-cache git postgresql-dev ${PHP_EXT_INSTALL:-}
     - docker-php-ext-install pdo_pgsql ${PHP_EXT_INSTALL:-}
@@ -43,6 +45,7 @@ test:code-quality:
   stage: test
   image: php:8.2-cli-alpine
   before_script:
+    - git submodule update --init --recursive --depth 20
     - apk add --no-cache git
     - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
     - cd invoiceninja
@@ -61,6 +64,7 @@ test:code-style:
   stage: test
   image: php:8.2-cli-alpine
   before_script:
+    - git submodule update --init --recursive --depth 20
     - apk add --no-cache git
     - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
     - composer global require squizlabs/php_codesniffer
@@ -110,6 +114,7 @@ test:e2e:
     POSTGRES_USER: invoiceninja
     POSTGRES_PASSWORD: testing
   before_script:
+    - git submodule update --init --recursive --depth 20
     - npm ci
   script:
     - npx playwright test

@@ -36,6 +36,7 @@ sast:phpstan:
   extends: .security_template
   image: php:8.2-cli-alpine
   before_script:
+    - git submodule update --init --recursive --depth 20
     - apk add --no-cache git
     - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
     - cd invoiceninja
@@ -112,6 +113,7 @@ security:dependency-check:
   extends: .security_template
   image: php:8.2-cli-alpine
   before_script:
+    - git submodule update --init --recursive --depth 20
     - apk add --no-cache git curl
     - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
   script:
