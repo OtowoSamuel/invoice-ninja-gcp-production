@@ -99,6 +99,11 @@ default:
           apt-get update && apt-get install -y git
         fi
       fi
+    - |
+      # Remove submodule directory if it exists but isn't initialized (cache conflict)
+      if [ -d "invoiceninja" ] && [ ! -d "invoiceninja/.git" ]; then
+        rm -rf invoiceninja
+      fi
     - git submodule update --init --recursive --depth 20
 
 ########################################
