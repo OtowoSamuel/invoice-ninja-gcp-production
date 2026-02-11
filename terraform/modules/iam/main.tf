@@ -80,3 +80,10 @@ resource "google_service_account_iam_member" "deployer_act_as_worker" {
   role               = "roles/iam.serviceAccountUser"
   member             = "serviceAccount:${google_service_account.deployer.email}"
 }
+
+# Grant Deployer SA ability to push Docker images to Artifact Registry
+resource "google_project_iam_member" "deployer_artifact_registry_writer" {
+  project = var.project_id
+  role    = "roles/artifactregistry.writer"
+  member  = "serviceAccount:${google_service_account.deployer.email}"
+}
