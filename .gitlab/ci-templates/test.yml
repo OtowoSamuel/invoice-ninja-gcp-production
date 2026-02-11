@@ -27,7 +27,6 @@
 test:unit:
   extends: .test_template
   script:
-    - cd invoiceninja
     - php artisan test --parallel --coverage-text --coverage-cobertura=coverage.cobertura.xml
   coverage: '/^\s*Lines:\s*\d+.\d+\%/'
   artifacts:
@@ -97,7 +96,6 @@ test:integration:
     DB_USERNAME: invoiceninja
     DB_PASSWORD: testing
   script:
-    - cd invoiceninja
     - php artisan migrate --force
     - php artisan test --testsuite=Integration
   artifacts:
