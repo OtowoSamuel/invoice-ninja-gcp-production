@@ -36,16 +36,17 @@ sast:phpstan:
   extends: .security_template
   image: php:8.2-cli-alpine
   before_script:
-    - apk add --no-cache git
+    - apk add --no-cache git libzip-dev libpng-dev libjpeg-turbo-dev freetype-dev
+    - docker-php-ext-install bcmath zip gd
     - rm -rf invoiceninja
     - git submodule update --init --recursive --depth 20
     - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
     - cd invoiceninja
     - composer install --no-dev --no-interaction --prefer-dist
-  script:
-    # Run PHPStan for static analysis
     - composer global require phpstan/phpstan
     - export PATH="$PATH:$HOME/.composer/vendor/bin"
+  script:
+    # Run PHPStan for static analysis
     - phpstan analyse --level=max --error-format=json > phpstan-security.json || true
   artifacts:
     paths:
@@ -118,9 +119,9 @@ security:dependency-check:
     - rm -rf invoiceninja
     - git submodule update --init --recursive --depth 20
     - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+    - cd invoiceninja
   script:
     # Composer security audit
-    - cd invoiceninja
     - composer audit --format=json > composer-audit.json || true
     # Check for outdated packages with security issues
     - composer outdated --direct --format=json > composer-outdated.json || true
@@ -133,8 +134,12 @@ security:dependency-check:
 security:npm-audit:
   extends: .security_template
   image: node:18-alpine
-  script:
+  before_script:
+    - apk add --no-cache git
+    - rm -rf invoiceninja
+    - git submodule update --init --recursive --depth 20
     - cd invoiceninja
+  script:
     - npm audit --json > npm-audit.json || true
     - npm audit --audit-level=high || true
   artifacts:
@@ -216,8 +221,12 @@ security:dast:zap:
 security:license-check:
   extends: .security_template
   image: licensefinder/license_finder:latest
-  script:
+  before_script:
+    - apk add --no-cache git
+    - rm -rf invoiceninja
+    - git submodule update --init --recursive --depth 20
     - cd invoiceninja
+  script:
     - license_finder report --format json > license-report.json || true
     # Fail on unapproved licenses
     - license_finder || true

@@ -27,17 +27,11 @@
 test:unit:
   extends: .test_template
   script:
-    - php artisan test --parallel --coverage-text --coverage-cobertura=coverage.cobertura.xml
-  coverage: '/^\s*Lines:\s*\d+.\d+\%/'
+    - php artisan test --parallel
   artifacts:
     when: always
     reports:
-      coverage_report:
-        coverage_format: cobertura
-        path: invoiceninja/coverage.cobertura.xml
       junit: invoiceninja/junit.xml
-    paths:
-      - invoiceninja/coverage.cobertura.xml
     expire_in: 1 week
 
 # Code Quality Analysis
@@ -95,7 +89,11 @@ test:integration:
     DB_DATABASE: testing
     DB_USERNAME: invoiceninja
     DB_PASSWORD: testing
+    APP_ENV: testing
+    APP_DEBUG: "true"
   script:
+    - cp .env.example .env || touch .env
+    - php artisan key:generate
     - php artisan migrate --force
     - php artisan test --testsuite=Integration
   artifacts:
