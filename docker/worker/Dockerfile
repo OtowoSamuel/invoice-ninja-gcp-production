@@ -30,7 +30,8 @@ FROM php:8.2-cli-alpine AS production
 # Install runtime dependencies (same as web, minus nginx)
 RUN apk add --no-cache \
     supervisor \
-    postgresql-client \
+    mysql-client \
+    postgresql16-client \
     libpng \
     libzip \
     freetype \
@@ -41,7 +42,8 @@ RUN apk add --no-cache \
 # Install PHP extensions
 RUN apk add --no-cache --virtual .build-deps \
     $PHPIZE_DEPS \
-    postgresql-dev \
+    mariadb-dev \
+    postgresql16-dev \
     libpng-dev \
     libzip-dev \
     freetype-dev \
@@ -49,6 +51,7 @@ RUN apk add --no-cache --virtual .build-deps \
     icu-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) \
+    pdo_mysql \
     pdo_pgsql \
     gd \
     zip \
@@ -56,6 +59,9 @@ RUN apk add --no-cache --virtual .build-deps \
     intl \
     pcntl \
     && apk del .build-deps
+
+# Keep queue jobs from failing on larger dependency graphs or exports
+RUN echo "memory_limit = 512M" > /usr/local/etc/php/conf.d/memory-limit.ini
 
 # IMPORTANT: pcntl extension for signal handling
 # WHY: Allows graceful shutdown when receiving SIGTERM

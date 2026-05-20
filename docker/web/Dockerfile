@@ -66,7 +66,8 @@ FROM php:8.2-fpm-alpine AS production
 RUN apk add --no-cache \
     nginx \
     supervisor \
-    postgresql-client \
+    mysql-client \
+    postgresql16-client \
     libpng \
     libzip \
     freetype \
@@ -78,7 +79,8 @@ RUN apk add --no-cache \
 # LEARNING: Laravel requires these for database, images, cache, etc.
 RUN apk add --no-cache --virtual .build-deps \
     $PHPIZE_DEPS \
-    postgresql-dev \
+    mariadb-dev \
+    postgresql16-dev \
     libpng-dev \
     libzip-dev \
     freetype-dev \
@@ -86,6 +88,7 @@ RUN apk add --no-cache --virtual .build-deps \
     icu-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) \
+    pdo_mysql \
     pdo_pgsql \
     gd \
     zip \
@@ -93,6 +96,9 @@ RUN apk add --no-cache --virtual .build-deps \
     intl \
     opcache \
     && apk del .build-deps
+
+# Raise the default PHP memory limit for Invoice Ninja's heavier admin flows
+RUN echo "memory_limit = 512M" > /usr/local/etc/php/conf.d/memory-limit.ini
 
 # SECURITY: Create non-root user (NEVER run as root!)
 # WHY: If app is compromised, attacker has limited permissions
@@ -126,6 +132,8 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Set proper permissions
 RUN chown -R invoiceninja:invoiceninja /var/www/html \
+    && mkdir -p /var/lib/nginx/tmp/client_body \
+    && chown -R invoiceninja:invoiceninja /var/lib/nginx \
     && chmod -R 755 /var/www/html/storage \
     && chmod -R 755 /var/www/html/bootstrap/cache
 

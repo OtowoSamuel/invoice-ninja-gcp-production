@@ -1,200 +1,335 @@
 # GitLab CI/CD Pipeline - Invoice Ninja GCP Production
-# Complete production-ready pipeline with security scanning and multi-environment deployment
-
-########################################
-# Pipeline Configuration
-########################################
+# Self-contained pipeline for validating the Docker setup, building images,
+# scanning for issues, and deploying the Cloud Run web service.
 
 workflow:
   rules:
-    # Run on merge requests
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    # Run on branches
     - if: '$CI_COMMIT_BRANCH'
-    # Run on tags
     - if: '$CI_COMMIT_TAG'
 
-# Global variables
 variables:
-  # Docker configuration
   DOCKER_DRIVER: overlay2
   DOCKER_BUILDKIT: "1"
-  
-  # GCP Artifact Registry
+  DOCKER_TLS_CERTDIR: ""
   GCP_REGION: "us-central1"
+  ARTIFACT_REGISTRY_REPOSITORY: "invoiceninja"
   REGISTRY_URL: "${GCP_REGION}-docker.pkg.dev"
-  
-  # Fail fast on errors
-  FF_USE_FASTZIP: "true"
-  CACHE_COMPRESSION_LEVEL: "fastest"
+  WEB_IMAGE: "${REGISTRY_URL}/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPOSITORY}/web"
+  WORKER_IMAGE: "${REGISTRY_URL}/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPOSITORY}/worker"
+  TRIVY_CACHE_DIR: "$CI_PROJECT_DIR/.trivycache"
+  DB_DATABASE_NAME: "invoiceninja"
+  DB_USERNAME: "invoiceninja"
+  DB_PORT: "5432"
+  CONCURRENCY: "80"
 
-# Global cache configuration
 cache:
   key: ${CI_COMMIT_REF_SLUG}
   paths:
     - .trivycache/
     - invoiceninja/vendor/
-    - invoiceninja/node_modules/
-
-########################################
-# Pipeline Stages
-########################################
 
 stages:
-  - build       # Build Docker images
-  - test        # Run tests
-  - security    # Security scanning
-  - deploy      # Deploy to environments
-  - verify      # Post-deployment verification
-  - rollback    # Emergency rollback (manual)
-
-########################################
-# Include Templates
-########################################
-
-include:
-  # Build templates
-  - local: '.gitlab/ci-templates/build.yml'
-  
-  # Test templates
-  - local: '.gitlab/ci-templates/test.yml'
-  
-  # Security scanning templates
-  - local: '.gitlab/ci-templates/security.yml'
-  
-  # Deployment templates
-  - local: '.gitlab/ci-templates/deploy.yml'
-  
-  # Rollback templates
-  - local: '.gitlab/ci-templates/rollback.yml'
-  
-  # Environment-specific variables
-  - local: '.gitlab/variables/dev.yml'
-  - local: '.gitlab/variables/staging.yml'
-  - local: '.gitlab/variables/prod.yml'
-
-########################################
-# Default Configuration
-########################################
+  - validate
+  - test
+  - build
+  - security
+  - deploy
+  - verify
 
 default:
-  # Retry configuration for all jobs
   retry:
     max: 2
     when:
       - runner_system_failure
       - stuck_or_timeout_failure
-  
-  # Interruptible by default (can be overridden)
   interruptible: true
-  
-  # Initialize Git submodules (Invoice Ninja)
+
+.submodule_setup:
   before_script:
     - |
-      # Install git if not present (Alpine images need this)
-      if ! command -v git &> /dev/null; then
-        if command -v apk &> /dev/null; then
+      if ! command -v git >/dev/null 2>&1; then
+        if command -v apk >/dev/null 2>&1; then
           apk add --no-cache git
-        elif command -v apt-get &> /dev/null; then
+        elif command -v apt-get >/dev/null 2>&1; then
           apt-get update && apt-get install -y git
         fi
       fi
+    - git submodule sync --recursive
+    - git submodule update --init --recursive --depth 1
+
+.docker_build_template:
+  stage: build
+  image: docker:24.0.7-git
+  services:
+    - name: docker:24.0.7-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+  extends: .submodule_setup
+  before_script:
+    - !reference [.submodule_setup, before_script]
     - |
-      # Remove submodule directory if it exists but isn't initialized (cache conflict)
-      if [ -d "invoiceninja" ] && [ ! -d "invoiceninja/.git" ]; then
-        rm -rf invoiceninja
+      if [ -z "${GCP_SERVICE_KEY:-}" ]; then
+        echo "GCP_SERVICE_KEY is required to push images to Artifact Registry"
+        exit 1
       fi
-    - git submodule update --init --recursive --depth 20
-
-########################################
-# Pipeline Stages Execution Flow
-########################################
-
-# DEVELOPMENT FLOW:
-#   MR/develop branch:
-#     build → test → security → deploy:dev → smoke:dev
-#
-# STAGING FLOW:
-#   main branch:
-#     build → test → security → [manual] deploy:staging → smoke:staging
-#
-# PRODUCTION FLOW:
-#   version tag (v1.2.3):
-#     build → test → security → [manual] deploy:prod → canary → rollout-50 → rollout-100
-#
-# ROLLBACK FLOW (manual):
-#   Emergency: rollback:prod:previous OR emergency:stop-traffic
-
-########################################
-# Custom Jobs (Pipeline-Specific)
-########################################
-
-# Pipeline Success Notification
-notify:success:
-  stage: .post
-  image: curlimages/curl:latest
+    - echo "$GCP_SERVICE_KEY" | docker login -u _json_key --password-stdin "https://${REGISTRY_URL}"
   script:
+    - docker pull "$IMAGE_NAME:$CI_COMMIT_REF_SLUG" || true
+    - docker build --pull --cache-from "$IMAGE_NAME:$CI_COMMIT_REF_SLUG" -f "$DOCKERFILE_PATH" -t "$IMAGE_NAME:$CI_COMMIT_SHA" -t "$IMAGE_NAME:$CI_COMMIT_REF_SLUG" .
     - |
-      echo "Pipeline ${CI_PIPELINE_ID} completed successfully"
-      echo "Commit: ${CI_COMMIT_SHA}"
-      echo "Branch: ${CI_COMMIT_REF_NAME}"
-      # Add webhook notification here (Slack, Discord, etc.)
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        docker tag "$IMAGE_NAME:$CI_COMMIT_SHA" "$IMAGE_NAME:$CI_COMMIT_TAG"
+        docker tag "$IMAGE_NAME:$CI_COMMIT_SHA" "$IMAGE_NAME:latest"
+      fi
+    - docker push "$IMAGE_NAME:$CI_COMMIT_SHA"
+    - docker push "$IMAGE_NAME:$CI_COMMIT_REF_SLUG"
+    - |
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        docker push "$IMAGE_NAME:$CI_COMMIT_TAG"
+        docker push "$IMAGE_NAME:latest"
+      fi
+
+.gcloud_deploy_template:
+  image: google/cloud-sdk:slim
+  extends: .submodule_setup
+  before_script:
+    - !reference [.submodule_setup, before_script]
+    - |
+      if [ -z "${GCP_SERVICE_KEY:-}" ]; then
+        echo "GCP_SERVICE_KEY is required to deploy to Cloud Run"
+        exit 1
+      fi
+    - printf '%s' "$GCP_SERVICE_KEY" > /tmp/gcp-service-key.json
+    - gcloud auth activate-service-account --key-file=/tmp/gcp-service-key.json
+    - gcloud config set project "$GCP_PROJECT_ID"
+
+validate:compose:
+  stage: validate
+  image: docker:24.0.7-git
+  services:
+    - name: docker:24.0.7-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+  script:
+    - apk add --no-cache docker-cli-compose
+    - docker compose config >/dev/null
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      when: on_success
+    - if: '$CI_COMMIT_BRANCH'
     - if: '$CI_COMMIT_TAG'
-      when: on_success
 
-# Pipeline Failure Notification
-notify:failure:
-  stage: .post
-  image: curlimages/curl:latest
+test:composer:
+  stage: test
+  image: composer:2.6
+  extends: .submodule_setup
   script:
-    - |
-      echo "⚠️ Pipeline ${CI_PIPELINE_ID} FAILED"
-      echo "Commit: ${CI_COMMIT_SHA}"
-      echo "Branch: ${CI_COMMIT_REF_NAME}"
-      echo "Failed Job: ${CI_JOB_NAME}"
-      # Add webhook notification here
+    - cd invoiceninja
+    - composer validate --strict
+    - composer install --no-interaction --no-progress --prefer-dist --no-dev --no-scripts --ignore-platform-reqs
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      when: on_failure
+    - if: '$CI_COMMIT_BRANCH'
     - if: '$CI_COMMIT_TAG'
-      when: on_failure
 
-########################################
-# Learning Resources
-########################################
-# 
-# This pipeline demonstrates:
-# 
-# 1. MULTI-STAGE PIPELINE
-#    - Build → Test → Security → Deploy → Verify
-# 
-# 2. ENVIRONMENT PROMOTION
-#    - dev (automatic) → staging (manual) → prod (manual, tags only)
-# 
-# 3. SECURITY-FIRST APPROACH
-#    - SAST (Semgrep, PHPStan)
-#    - Container scanning (Trivy)
-#    - Dependency scanning
-#    - Secrets scanning (TruffleHog, GitLeaks)
-#    - DAST (OWASP ZAP)
-# 
-# 4. BLUE-GREEN/CANARY DEPLOYMENTS
-#    - Deploy with --no-traffic
-#    - Gradual traffic shift: 10% → 50% → 100%
-#    - Easy rollback to previous revision
-# 
-# 5. ARTIFACTS & CACHING
-#    - Docker layer caching
-#    - Composer/npm dependency caching
-#    - Build artifacts shared between jobs
-# 
-# 6. APPROVAL GATES
-#    - Manual approval for staging
-#    - Manual approval for production
-#    - Tag-based production deployments
-#
-# Learn more: docs/LEARNING_PATH.md - Phase 2.1-2.2
+build:web:
+  extends: .docker_build_template
+  variables:
+    IMAGE_NAME: "$WEB_IMAGE"
+    DOCKERFILE_PATH: "docker/web/Dockerfile"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_TAG'
+
+build:worker:
+  extends: .docker_build_template
+  variables:
+    IMAGE_NAME: "$WORKER_IMAGE"
+    DOCKERFILE_PATH: "docker/worker/Dockerfile"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_TAG'
+
+security:trivy:
+  stage: security
+  image: aquasec/trivy:0.62.0
+  script:
+    - trivy fs --cache-dir "$TRIVY_CACHE_DIR" --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 .
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
+    - if: '$CI_COMMIT_TAG'
+
+deploy:web:dev:
+  stage: deploy
+  extends: .gcloud_deploy_template
+  variables:
+    CLOUD_RUN_SERVICE_NAME: "invoice-ninja-web"
+    CLOUD_RUN_URL: "${CLOUD_RUN_URL_DEV}"
+    CLOUD_RUN_SERVICE_ACCOUNT: "${CLOUD_RUN_WEB_SA}"
+    APP_ENV: "development"
+    APP_DEBUG: "true"
+    CACHE_DRIVER: "file"
+    QUEUE_CONNECTION: "database"
+    MIN_INSTANCES: "0"
+    MAX_INSTANCES: "5"
+    MEMORY_LIMIT: "512Mi"
+    CPU_LIMIT: "1"
+    APP_KEY_SECRET: "invoice-ninja-dev-app-key"
+    DB_PASSWORD_SECRET: "invoice-ninja-dev-db-password"
+    SMTP_PASSWORD_SECRET: "invoice-ninja-dev-smtp-password"
+    STRIPE_KEY_SECRET: "invoice-ninja-dev-stripe-key"
+  script:
+    - |
+      gcloud run deploy "$CLOUD_RUN_SERVICE_NAME" \
+        --image "$WEB_IMAGE:$CI_COMMIT_SHA" \
+        --region "$GCP_REGION" \
+        --platform managed \
+        --allow-unauthenticated \
+        --service-account "$CLOUD_RUN_SERVICE_ACCOUNT" \
+        --vpc-connector "$VPC_CONNECTOR" \
+        --add-cloudsql-instances "$CLOUD_SQL_CONNECTION_NAME" \
+        --set-env-vars "APP_ENV=${APP_ENV},APP_DEBUG=${APP_DEBUG},APP_URL=${CLOUD_RUN_URL},DB_CONNECTION=pgsql,DB_HOST=/cloudsql/${CLOUD_SQL_CONNECTION_NAME},DB_PORT=${DB_PORT},DB_DATABASE=${DB_DATABASE_NAME},DB_USERNAME=${DB_USERNAME},CACHE_DRIVER=${CACHE_DRIVER},QUEUE_CONNECTION=${QUEUE_CONNECTION}" \
+        --set-secrets "APP_KEY=${APP_KEY_SECRET}:latest,DB_PASSWORD=${DB_PASSWORD_SECRET}:latest,SMTP_PASSWORD=${SMTP_PASSWORD_SECRET}:latest,STRIPE_KEY=${STRIPE_KEY_SECRET}:latest" \
+        --memory "$MEMORY_LIMIT" \
+        --cpu "$CPU_LIMIT" \
+        --min-instances "$MIN_INSTANCES" \
+        --max-instances "$MAX_INSTANCES" \
+        --concurrency "$CONCURRENCY" \
+        --timeout 300 \
+        --quiet
+  environment:
+    name: dev
+    url: $CLOUD_RUN_URL_DEV
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+
+deploy:web:staging:
+  stage: deploy
+  extends: .gcloud_deploy_template
+  variables:
+    CLOUD_RUN_SERVICE_NAME: "invoice-ninja-web"
+    CLOUD_RUN_URL: "${CLOUD_RUN_URL_STAGING}"
+    CLOUD_RUN_SERVICE_ACCOUNT: "${CLOUD_RUN_WEB_SA}"
+    APP_ENV: "staging"
+    APP_DEBUG: "false"
+    CACHE_DRIVER: "redis"
+    QUEUE_CONNECTION: "redis"
+    MIN_INSTANCES: "1"
+    MAX_INSTANCES: "10"
+    MEMORY_LIMIT: "512Mi"
+    CPU_LIMIT: "1"
+    APP_KEY_SECRET: "invoice-ninja-dev-app-key"
+    DB_PASSWORD_SECRET: "invoice-ninja-dev-db-password"
+    SMTP_PASSWORD_SECRET: "invoice-ninja-dev-smtp-password"
+    STRIPE_KEY_SECRET: "invoice-ninja-dev-stripe-key"
+  script:
+    - |
+      gcloud run deploy "$CLOUD_RUN_SERVICE_NAME" \
+        --image "$WEB_IMAGE:$CI_COMMIT_SHA" \
+        --region "$GCP_REGION" \
+        --platform managed \
+        --allow-unauthenticated \
+        --service-account "$CLOUD_RUN_SERVICE_ACCOUNT" \
+        --vpc-connector "$VPC_CONNECTOR" \
+        --add-cloudsql-instances "$CLOUD_SQL_CONNECTION_NAME" \
+        --set-env-vars "APP_ENV=${APP_ENV},APP_DEBUG=${APP_DEBUG},APP_URL=${CLOUD_RUN_URL},DB_CONNECTION=pgsql,DB_HOST=/cloudsql/${CLOUD_SQL_CONNECTION_NAME},DB_PORT=${DB_PORT},DB_DATABASE=${DB_DATABASE_NAME},DB_USERNAME=${DB_USERNAME},CACHE_DRIVER=${CACHE_DRIVER},QUEUE_CONNECTION=${QUEUE_CONNECTION}" \
+        --set-secrets "APP_KEY=${APP_KEY_SECRET}:latest,DB_PASSWORD=${DB_PASSWORD_SECRET}:latest,SMTP_PASSWORD=${SMTP_PASSWORD_SECRET}:latest,STRIPE_KEY=${STRIPE_KEY_SECRET}:latest" \
+        --memory "$MEMORY_LIMIT" \
+        --cpu "$CPU_LIMIT" \
+        --min-instances "$MIN_INSTANCES" \
+        --max-instances "$MAX_INSTANCES" \
+        --concurrency "$CONCURRENCY" \
+        --timeout 300 \
+        --quiet
+  environment:
+    name: staging
+    url: $CLOUD_RUN_URL_STAGING
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+
+deploy:web:prod:
+  stage: deploy
+  extends: .gcloud_deploy_template
+  variables:
+    CLOUD_RUN_SERVICE_NAME: "invoice-ninja-web"
+    CLOUD_RUN_URL: "${CLOUD_RUN_URL_PROD}"
+    CLOUD_RUN_SERVICE_ACCOUNT: "${CLOUD_RUN_WEB_SA}"
+    APP_ENV: "production"
+    APP_DEBUG: "false"
+    CACHE_DRIVER: "redis"
+    QUEUE_CONNECTION: "redis"
+    MIN_INSTANCES: "2"
+    MAX_INSTANCES: "50"
+    MEMORY_LIMIT: "1Gi"
+    CPU_LIMIT: "2"
+    APP_KEY_SECRET: "invoice-ninja-dev-app-key"
+    DB_PASSWORD_SECRET: "invoice-ninja-dev-db-password"
+    SMTP_PASSWORD_SECRET: "invoice-ninja-dev-smtp-password"
+    STRIPE_KEY_SECRET: "invoice-ninja-dev-stripe-key"
+  script:
+    - |
+      gcloud run deploy "$CLOUD_RUN_SERVICE_NAME" \
+        --image "$WEB_IMAGE:$CI_COMMIT_SHA" \
+        --region "$GCP_REGION" \
+        --platform managed \
+        --allow-unauthenticated \
+        --service-account "$CLOUD_RUN_SERVICE_ACCOUNT" \
+        --vpc-connector "$VPC_CONNECTOR" \
+        --add-cloudsql-instances "$CLOUD_SQL_CONNECTION_NAME" \
+        --set-env-vars "APP_ENV=${APP_ENV},APP_DEBUG=${APP_DEBUG},APP_URL=${CLOUD_RUN_URL},DB_CONNECTION=pgsql,DB_HOST=/cloudsql/${CLOUD_SQL_CONNECTION_NAME},DB_PORT=${DB_PORT},DB_DATABASE=${DB_DATABASE_NAME},DB_USERNAME=${DB_USERNAME},CACHE_DRIVER=${CACHE_DRIVER},QUEUE_CONNECTION=${QUEUE_CONNECTION}" \
+        --set-secrets "APP_KEY=${APP_KEY_SECRET}:latest,DB_PASSWORD=${DB_PASSWORD_SECRET}:latest,SMTP_PASSWORD=${SMTP_PASSWORD_SECRET}:latest,STRIPE_KEY=${STRIPE_KEY_SECRET}:latest" \
+        --memory "$MEMORY_LIMIT" \
+        --cpu "$CPU_LIMIT" \
+        --min-instances "$MIN_INSTANCES" \
+        --max-instances "$MAX_INSTANCES" \
+        --concurrency "$CONCURRENCY" \
+        --timeout 300 \
+        --quiet
+  environment:
+    name: production
+    url: $CLOUD_RUN_URL_PROD
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: manual
+
+verify:web:dev:
+  stage: verify
+  image: curlimages/curl:8.8.0
+  script:
+    - curl -fsS "$CLOUD_RUN_URL_DEV/health"
+  environment:
+    name: dev
+    url: $CLOUD_RUN_URL_DEV
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+
+verify:web:staging:
+  stage: verify
+  image: curlimages/curl:8.8.0
+  script:
+    - curl -fsS "$CLOUD_RUN_URL_STAGING/health"
+  environment:
+    name: staging
+    url: $CLOUD_RUN_URL_STAGING
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+
+verify:web:prod:
+  stage: verify
+  image: curlimages/curl:8.8.0
+  script:
+    - curl -fsS "$CLOUD_RUN_URL_PROD/health"
+  environment:
+    name: production
+    url: $CLOUD_RUN_URL_PROD
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: manual
 
