@@ -58,6 +58,8 @@ build/
 
 # Secrets & credentials
 secrets/
+!terraform/modules/secrets/
+!terraform/modules/secrets/*
 *.pem
 *.key
 *.crt
