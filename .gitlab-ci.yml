@@ -238,7 +238,6 @@ deploy:web:dev:
     name: dev
     url: $CLOUD_RUN_URL_DEV
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_BRANCH == "develop"'
 
 deploy:web:staging:
@@ -288,7 +287,9 @@ deploy:web:staging:
     name: staging
     url: $CLOUD_RUN_URL_STAGING
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH =~ /^release\/.*$/'
+      when: manual
+    - if: '$CI_COMMIT_BRANCH == "releases"'
       when: manual
 
 deploy:web:prod:
@@ -338,6 +339,8 @@ deploy:web:prod:
     name: production
     url: $CLOUD_RUN_URL_PROD
   rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
     - if: '$CI_COMMIT_TAG'
       when: manual
 
@@ -357,7 +360,6 @@ verify:web:dev:
     name: dev
     url: $CLOUD_RUN_URL_DEV
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_BRANCH == "develop"'
 
 verify:web:staging:
@@ -376,7 +378,9 @@ verify:web:staging:
     name: staging
     url: $CLOUD_RUN_URL_STAGING
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH =~ /^release\/.*$/'
+      when: manual
+    - if: '$CI_COMMIT_BRANCH == "releases"'
       when: manual
 
 verify:web:prod:
@@ -395,6 +399,8 @@ verify:web:prod:
     name: production
     url: $CLOUD_RUN_URL_PROD
   rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
     - if: '$CI_COMMIT_TAG'
       when: manual
 
@@ -438,7 +444,6 @@ tf:plan:dev:
     expire_in: 1 week
   rules:
     - if: '$CI_COMMIT_BRANCH == "develop"'
-    - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
 
 tf:apply:dev:
@@ -453,5 +458,4 @@ tf:apply:dev:
   dependencies:
     - tf:plan:dev
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_BRANCH == "develop"'
