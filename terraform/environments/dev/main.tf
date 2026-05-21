@@ -129,6 +129,44 @@ module "cloud_run_web" {
   }
 }
 
+# Cloud Run Module - Worker Application
+module "cloud_run_worker" {
+  source = "../../modules/cloud-run"
+  
+  project_id       = var.project_id
+  region           = var.region
+  env              = "dev"
+  service_name     = "invoice-ninja-worker"
+  container_image  = var.web_container_image # Will be replaced by CI/CD
+  vpc_connector_id = module.networking.vpc_connector_id
+  
+  service_account_email = module.iam.cloud_run_sa_email
+  allow_unauthenticated = false # Workers do not serve public traffic
+  cpu_throttling        = false # CRITICAL: CPU always allocated for background jobs
+  
+  # Dev settings
+  min_instances = 0
+  max_instances = 1
+  cpu_limit     = "1"
+  memory_limit  = "512Mi"
+  
+  env_vars = {
+    APP_ENV          = "development"
+    APP_DEBUG        = "true"
+    DB_CONNECTION    = "pgsql"
+    DB_HOST          = module.cloud_sql.private_ip
+    DB_PORT          = "5432"
+    DB_DATABASE      = var.database_name
+    CACHE_DRIVER     = "file"
+    QUEUE_CONNECTION = "database"
+  }
+  
+  secrets = {
+    DB_PASSWORD = "${module.cloud_sql.db_password_secret_id}:latest"
+    APP_KEY     = "${module.secrets.app_key_secret_id}:latest"
+  }
+}
+
 # Monitoring Module
 module "monitoring" {
   source = "../../modules/monitoring"
