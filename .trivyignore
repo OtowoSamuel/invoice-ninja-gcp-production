@@ -2,3 +2,5 @@
 AVD-DS-0002
 # Ignore apt-get --no-install-recommends in vendor Dockerfiles
 AVD-DS-0029
+# Ignore Cloud SQL require_ssl warning (we use ssl_mode instead, which is mutually exclusive)
+AVD-GCP-0015
