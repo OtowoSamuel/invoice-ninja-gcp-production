@@ -83,8 +83,9 @@ default:
       fi
     - echo "$GCP_SERVICE_KEY" | docker login -u _json_key --password-stdin "https://${REGISTRY_URL}"
   script:
+    - docker pull "$IMAGE_NAME:latest" || true
     - docker pull "$IMAGE_NAME:$CI_COMMIT_REF_SLUG" || true
-    - docker build --pull --cache-from "$IMAGE_NAME:$CI_COMMIT_REF_SLUG" -f "$DOCKERFILE_PATH" -t "$IMAGE_NAME:$CI_COMMIT_SHA" -t "$IMAGE_NAME:$CI_COMMIT_REF_SLUG" .
+    - docker build --pull --build-arg BUILDKIT_INLINE_CACHE=1 --cache-from "$IMAGE_NAME:latest" --cache-from "$IMAGE_NAME:$CI_COMMIT_REF_SLUG" -f "$DOCKERFILE_PATH" -t "$IMAGE_NAME:$CI_COMMIT_SHA" -t "$IMAGE_NAME:$CI_COMMIT_REF_SLUG" .
     - |
       if [ -n "$CI_COMMIT_TAG" ]; then
         docker tag "$IMAGE_NAME:$CI_COMMIT_SHA" "$IMAGE_NAME:$CI_COMMIT_TAG"
