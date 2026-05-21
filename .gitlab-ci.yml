@@ -57,8 +57,13 @@ default:
           apt-get update && apt-get install -y git
         fi
       fi
+    - |
+      # Ensure any leftover submodule checkout from caches is removed
+      if [ -d invoiceninja ]; then
+        rm -rf invoiceninja
+      fi
     - git submodule sync --recursive
-    - git submodule update --init --recursive --depth 1
+    - git submodule update --init --recursive --force --depth 1
 
 .docker_build_template:
   stage: build
