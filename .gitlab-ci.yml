@@ -124,6 +124,7 @@ default:
 validate:compose:
   stage: validate
   image: docker:24.0.7-git
+  needs: []
   services:
     - name: docker:24.0.7-dind
       alias: docker
@@ -140,6 +141,7 @@ validate:compose:
 test:composer:
   stage: test
   image: composer:2.6
+  needs: []
   extends: .submodule_setup
   script:
     - cd invoiceninja
@@ -152,6 +154,8 @@ test:composer:
 
 build:web:
   extends: .docker_build_template
+  needs: []
+  timeout: 15m
   variables:
     IMAGE_NAME: "$WEB_IMAGE"
     DOCKERFILE_PATH: "docker/web/Dockerfile"
@@ -162,6 +166,8 @@ build:web:
 
 build:worker:
   extends: .docker_build_template
+  needs: []
+  timeout: 15m
   variables:
     IMAGE_NAME: "$WORKER_IMAGE"
     DOCKERFILE_PATH: "docker/worker/Dockerfile"
@@ -172,6 +178,8 @@ build:worker:
 
 security:trivy:
   stage: security
+  needs: []
+  timeout: 10m
   image:
     name: aquasec/trivy:0.62.0
     entrypoint: [""]
@@ -185,6 +193,12 @@ security:trivy:
 deploy:web:dev:
   stage: deploy
   extends: .gcloud_deploy_template
+  needs:
+    - build:web
+    - build:worker
+    - tf:apply:dev
+  timeout: 15m
+  resource_group: deploy-dev
   variables:
     CLOUD_RUN_SERVICE_NAME: "invoice-ninja-web"
     CLOUD_RUN_URL: "${CLOUD_RUN_URL_DEV}"
@@ -230,6 +244,11 @@ deploy:web:dev:
 deploy:web:staging:
   stage: deploy
   extends: .gcloud_deploy_template
+  needs:
+    - build:web
+    - build:worker
+  timeout: 15m
+  resource_group: deploy-staging
   variables:
     CLOUD_RUN_SERVICE_NAME: "invoice-ninja-web"
     CLOUD_RUN_URL: "${CLOUD_RUN_URL_STAGING}"
@@ -275,6 +294,11 @@ deploy:web:staging:
 deploy:web:prod:
   stage: deploy
   extends: .gcloud_deploy_template
+  needs:
+    - build:web
+    - build:worker
+  timeout: 15m
+  resource_group: deploy-prod
   variables:
     CLOUD_RUN_SERVICE_NAME: "invoice-ninja-web"
     CLOUD_RUN_URL: "${CLOUD_RUN_URL_PROD}"
@@ -402,6 +426,8 @@ verify:web:prod:
 tf:plan:dev:
   stage: infrastructure-plan
   extends: .terraform_template
+  needs: []
+  timeout: 10m
   variables:
     ENV: "dev"
   script:
@@ -409,6 +435,7 @@ tf:plan:dev:
   artifacts:
     paths:
       - terraform/environments/dev/tfplan
+    expire_in: 1 week
   rules:
     - if: '$CI_COMMIT_BRANCH == "develop"'
     - if: '$CI_COMMIT_BRANCH == "main"'
@@ -417,6 +444,8 @@ tf:plan:dev:
 tf:apply:dev:
   stage: infrastructure-apply
   extends: .terraform_template
+  timeout: 30m
+  resource_group: terraform-dev
   variables:
     ENV: "dev"
   script:
