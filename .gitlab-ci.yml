@@ -46,6 +46,7 @@ stages:
   - security
   - deploy
   - verify
+  - destroy
 
 default:
   retry:
@@ -655,3 +656,16 @@ tf:apply:dev:
     - tf:plan:dev
   rules:
     - if: '$CI_COMMIT_BRANCH == "develop"'
+
+tf:destroy:dev:
+  stage: destroy
+  extends: .terraform_template
+  timeout: 30m
+  resource_group: terraform-dev
+  variables:
+    ENV: "dev"
+  script:
+    - terraform destroy -input=false -auto-approve
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+      when: manual
