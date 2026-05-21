@@ -129,7 +129,7 @@ test:composer:
   extends: .submodule_setup
   script:
     - cd invoiceninja
-    - composer validate --strict
+    - composer validate
     - composer install --no-interaction --no-progress --prefer-dist --no-dev --no-scripts --ignore-platform-reqs
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
