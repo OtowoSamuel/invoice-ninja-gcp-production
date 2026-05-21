@@ -2,6 +2,11 @@
 
 terraform {
   required_version = ">= 1.5.0"
+
+  backend "gcs" {
+    bucket = "invoice-ninja-dev-17453-tf-state"
+    prefix = "terraform/state/dev"
+  }
   
   required_providers {
     google = {

@@ -7,16 +7,16 @@
 - [x] Create learning path
 
 ## Phase 2: Docker & Application (Next)
-- [ ] Create web application Dockerfile
-- [ ] Create queue worker Dockerfile
-- [ ] Set up docker-compose for local dev
-- [ ] Test containers locally
+- [x] Create web application Dockerfile
+- [x] Create queue worker Dockerfile
+- [x] Set up docker-compose for local dev
+- [x] Test containers locally
 
-## Phase 3: GitLab CI/CD
-- [ ] Create .gitlab-ci.yml
-- [ ] Set up build pipeline
-- [ ] Integrate security scanning (SAST, DAST, Trivy)
-- [ ] Configure deployment stages
+## Phase 3: GitLab CI/CD ✅
+- [x] Create .gitlab-ci.yml
+- [x] Set up build pipeline
+- [x] Integrate security scanning (SAST, DAST, Trivy)
+- [x] Configure deployment stages
 
 ## Phase 4: Infrastructure Deployment
 - [ ] Deploy dev environment
