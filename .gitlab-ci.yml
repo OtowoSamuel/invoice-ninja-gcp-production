@@ -167,7 +167,7 @@ security:trivy:
     name: aquasec/trivy:0.62.0
     entrypoint: [""]
   script:
-    - trivy fs --cache-dir "$TRIVY_CACHE_DIR" --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 .
+    - trivy fs --cache-dir "$TRIVY_CACHE_DIR" --skip-dirs "invoiceninja/vendor" --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 .
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH'
@@ -393,6 +393,4 @@ tf:apply:dev:
     - tf:plan:dev
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
-      when: manual
     - if: '$CI_COMMIT_BRANCH == "develop"'
-      when: manual

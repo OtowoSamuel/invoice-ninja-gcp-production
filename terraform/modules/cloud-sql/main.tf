@@ -38,6 +38,7 @@ resource "google_sql_database_instance" "main" {
     ip_configuration {
       ipv4_enabled    = false  # No public IP
       private_network = var.network_id
+      require_ssl     = true
       ssl_mode        = "ENCRYPTED_ONLY"  # Replaces deprecated require_ssl
     }
 
