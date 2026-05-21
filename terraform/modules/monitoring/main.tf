@@ -36,13 +36,13 @@ resource "google_monitoring_alert_policy" "high_latency" {
   combiner     = "OR"
 
   conditions {
-    display_name = "95th percentile latency > 2s"
+    display_name = "95th percentile latency > 5s"
     
     condition_threshold {
       filter          = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${var.service_name}\" AND metric.type=\"run.googleapis.com/request_latencies\""
       duration        = "300s"
       comparison      = "COMPARISON_GT"
-      threshold_value = 2000  # 2000ms = 2s
+      threshold_value = 5000  # 5000ms = 5s
       
       aggregations {
         alignment_period     = "60s"
