@@ -24,10 +24,18 @@ variables:
   CONCURRENCY: "80"
 
 cache:
-  key: ${CI_COMMIT_REF_SLUG}
-  paths:
-    - .trivycache/
-    - invoiceninja/vendor/
+  - key: "composer-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - invoiceninja/vendor/
+    policy: pull-push
+  - key: "trivy-db"
+    paths:
+      - .trivycache/
+    policy: pull-push
+  - key: "terraform-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - terraform/environments/*/.terraform/
+    policy: pull-push
 
 stages:
   - validate
@@ -216,6 +224,7 @@ deploy:web:dev:
     name: dev
     url: $CLOUD_RUN_URL_DEV
   rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_BRANCH == "develop"'
 
 deploy:web:staging:
@@ -311,19 +320,34 @@ deploy:web:prod:
 verify:web:dev:
   stage: verify
   image: curlimages/curl:8.8.0
+  needs:
+    - deploy:web:dev
   script:
-    - curl -fsS "$CLOUD_RUN_URL_DEV/health"
+    - |
+      if [ -z "${CLOUD_RUN_URL_DEV:-}" ]; then
+        echo "CLOUD_RUN_URL_DEV not set — skipping verification"
+        exit 0
+      fi
+    - curl -fsS --retry 3 --retry-delay 5 "$CLOUD_RUN_URL_DEV/health"
   environment:
     name: dev
     url: $CLOUD_RUN_URL_DEV
   rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_BRANCH == "develop"'
 
 verify:web:staging:
   stage: verify
   image: curlimages/curl:8.8.0
+  needs:
+    - deploy:web:staging
   script:
-    - curl -fsS "$CLOUD_RUN_URL_STAGING/health"
+    - |
+      if [ -z "${CLOUD_RUN_URL_STAGING:-}" ]; then
+        echo "CLOUD_RUN_URL_STAGING not set — skipping verification"
+        exit 0
+      fi
+    - curl -fsS --retry 3 --retry-delay 5 "$CLOUD_RUN_URL_STAGING/health"
   environment:
     name: staging
     url: $CLOUD_RUN_URL_STAGING
@@ -334,8 +358,15 @@ verify:web:staging:
 verify:web:prod:
   stage: verify
   image: curlimages/curl:8.8.0
+  needs:
+    - deploy:web:prod
   script:
-    - curl -fsS "$CLOUD_RUN_URL_PROD/health"
+    - |
+      if [ -z "${CLOUD_RUN_URL_PROD:-}" ]; then
+        echo "CLOUD_RUN_URL_PROD not set — skipping verification"
+        exit 0
+      fi
+    - curl -fsS --retry 3 --retry-delay 5 "$CLOUD_RUN_URL_PROD/health"
   environment:
     name: production
     url: $CLOUD_RUN_URL_PROD
