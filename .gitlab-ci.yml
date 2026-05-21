@@ -351,6 +351,18 @@ verify:web:prod:
   before_script:
     - cd terraform/environments/${ENV}
     - export GOOGLE_CREDENTIALS="${GCP_SERVICE_KEY}"
+    - export TF_IN_AUTOMATION=true
+    - |
+      ALERT_EMAIL_VALUE="${GCP_ALERT_EMAIL:-${ALERT_EMAIL:-}}"
+      if [ -z "${GCP_PROJECT_ID:-}" ] || [ -z "${ALERT_EMAIL_VALUE:-}" ]; then
+        echo "GCP_PROJECT_ID and GCP_ALERT_EMAIL (or ALERT_EMAIL) must be set in GitLab CI/CD variables"
+        exit 1
+      fi
+    - |
+      cat > terraform.auto.tfvars <<EOF
+      project_id = "${GCP_PROJECT_ID}"
+      alert_email = "${ALERT_EMAIL_VALUE}"
+      EOF
     - terraform init
 
 tf:plan:dev:
@@ -359,7 +371,7 @@ tf:plan:dev:
   variables:
     ENV: "dev"
   script:
-    - terraform plan -out=tfplan
+    - terraform plan -input=false -out=tfplan
   artifacts:
     paths:
       - terraform/environments/dev/tfplan
@@ -374,7 +386,7 @@ tf:apply:dev:
   variables:
     ENV: "dev"
   script:
-    - terraform apply -auto-approve tfplan
+    - terraform apply -input=false -auto-approve tfplan
   dependencies:
     - tf:plan:dev
   rules:
