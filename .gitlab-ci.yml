@@ -163,7 +163,9 @@ build:worker:
 
 security:trivy:
   stage: security
-  image: aquasec/trivy:0.62.0
+  image:
+    name: aquasec/trivy:0.62.0
+    entrypoint: [""]
   script:
     - trivy fs --cache-dir "$TRIVY_CACHE_DIR" --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 .
   rules:
