@@ -605,6 +605,7 @@ deploy:worker:prod:
 # ==============================================================================
 # TERRAFORM INFRASTRUCTURE PIPELINE
 # ==============================================================================
+
 .terraform_template:
   image:
     name: hashicorp/terraform:1.5
@@ -639,6 +640,9 @@ tf:plan:dev:
     paths:
       - terraform/environments/dev/tfplan
     expire_in: 1 week
+  environment:
+    name: dev
+    action: prepare
   rules:
     - if: '$CI_COMMIT_BRANCH == "develop"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
@@ -654,6 +658,8 @@ tf:apply:dev:
     - terraform apply -input=false -auto-approve tfplan
   dependencies:
     - tf:plan:dev
+  environment:
+    name: dev
   rules:
     - if: '$CI_COMMIT_BRANCH == "develop"'
 
@@ -666,6 +672,100 @@ tf:destroy:dev:
     ENV: "dev"
   script:
     - terraform destroy -input=false -auto-approve
+  environment:
+    name: dev
   rules:
     - if: '$CI_COMMIT_BRANCH == "develop"'
+      when: manual
+
+tf:plan:staging:
+  stage: infrastructure-plan
+  extends: .terraform_template
+  needs: []
+  timeout: 10m
+  variables:
+    ENV: "staging"
+  script:
+    - terraform plan -input=false -out=tfplan
+  artifacts:
+    paths:
+      - terraform/environments/staging/tfplan
+    expire_in: 1 week
+  environment:
+    name: staging
+    action: prepare
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^release\/.*$/'
+    - if: '$CI_COMMIT_BRANCH == "releases"'
+
+tf:apply:staging:
+  stage: infrastructure-apply
+  extends: .terraform_template
+  timeout: 30m
+  resource_group: terraform-staging
+  variables:
+    ENV: "staging"
+  script:
+    - terraform apply -input=false -auto-approve tfplan
+  dependencies:
+    - tf:plan:staging
+  environment:
+    name: staging
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^release\/.*$/'
+      when: manual
+    - if: '$CI_COMMIT_BRANCH == "releases"'
+      when: manual
+
+tf:destroy:staging:
+  stage: destroy
+  extends: .terraform_template
+  timeout: 30m
+  resource_group: terraform-staging
+  variables:
+    ENV: "staging"
+  script:
+    - terraform destroy -input=false -auto-approve
+  environment:
+    name: staging
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^release\/.*$/'
+      when: manual
+    - if: '$CI_COMMIT_BRANCH == "releases"'
+      when: manual
+
+tf:plan:prod:
+  stage: infrastructure-plan
+  extends: .terraform_template
+  needs: []
+  timeout: 10m
+  variables:
+    ENV: "prod"
+  script:
+    - terraform plan -input=false -out=tfplan
+  artifacts:
+    paths:
+      - terraform/environments/prod/tfplan
+    expire_in: 1 week
+  environment:
+    name: production
+    action: prepare
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+tf:apply:prod:
+  stage: infrastructure-apply
+  extends: .terraform_template
+  timeout: 30m
+  resource_group: terraform-prod
+  variables:
+    ENV: "prod"
+  script:
+    - terraform apply -input=false -auto-approve tfplan
+  dependencies:
+    - tf:plan:prod
+  environment:
+    name: production
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
       when: manual

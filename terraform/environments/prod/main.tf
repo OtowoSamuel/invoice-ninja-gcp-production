@@ -16,7 +16,7 @@ terraform {
 
   # Backend configuration for state storage
   backend "gcs" {
-    bucket = "invoice-ninja-prod-terraform-state"
+    bucket = "invoice-ninja-prd-17453-tf-state"
     prefix = "prod"
   }
 }
