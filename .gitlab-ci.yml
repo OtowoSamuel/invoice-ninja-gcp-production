@@ -90,7 +90,7 @@ default:
         echo "GCP_SERVICE_KEY is required to push images to Artifact Registry"
         exit 1
       fi
-    - echo "$GCP_SERVICE_KEY" | docker login -u _json_key --password-stdin "https://${REGISTRY_URL}"
+    - echo "$GCP_SERVICE_KEY" | base64 -d | docker login -u _json_key --password-stdin "https://${REGISTRY_URL}"
   script:
     - docker pull "$IMAGE_NAME:latest" || true
     - docker pull "$IMAGE_NAME:$CI_COMMIT_REF_SLUG" || true
@@ -118,7 +118,7 @@ default:
         echo "GCP_SERVICE_KEY is required to deploy to Cloud Run"
         exit 1
       fi
-    - printf '%s' "$GCP_SERVICE_KEY" > /tmp/gcp-service-key.json
+    - echo "$GCP_SERVICE_KEY" | base64 -d > /tmp/gcp-service-key.json
     - gcloud auth activate-service-account --key-file=/tmp/gcp-service-key.json
     - gcloud config set project "$GCP_PROJECT_ID"
 
@@ -612,7 +612,8 @@ deploy:worker:prod:
     entrypoint: [""]
   before_script:
     - cd terraform/environments/${ENV}
-    - export GOOGLE_CREDENTIALS="${GCP_SERVICE_KEY}"
+    - echo "$GCP_SERVICE_KEY" | base64 -d > /tmp/gcp-credentials.json
+    - export GOOGLE_CREDENTIALS="$(cat /tmp/gcp-credentials.json)"
     - export TF_IN_AUTOMATION=true
     - |
       ALERT_EMAIL_VALUE="${GCP_ALERT_EMAIL:-${ALERT_EMAIL:-}}"
